@@ -1,0 +1,59 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background: #f8fafc;
+}
+
+* {
+  transition: all 0.2s ease;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  /* Dark Navy + Cyan - Crypto Native Theme */
+  .gradient-koi-purple {
+    background: #001f54;
+  }
+  
+  .gradient-koi-purple:hover {
+    background: #003d7a;
+  }
+  
+  .text-gradient-koi {
+    background: linear-gradient(135deg, #001f54 0%, #06b6d4 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .gradient-navy-cyan {
+    background: linear-gradient(135deg, #001f54 0%, #06b6d4 100%);
+  }
+  
+  .shadow-minimal {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  }
+  
+  .shadow-minimal-hover {
+    box-shadow: 0 8px 24px rgba(6, 182, 212, 0.15), 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+  
+  /* Live pulse animation */
+  @keyframes pulse-live {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.6;
+    }
+  }
+  
+  .animate-pulse-live {
+    animation: pulse-live 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
