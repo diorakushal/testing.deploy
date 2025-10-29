@@ -8,6 +8,11 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // Nu Brand Colors
+        nu: {
+          blue: '#2952FF',  // Primary Blue - RGB: 41, 82, 255
+          green: '#00D07E', // Primary Green - RGB: 0, 208, 126
+        },
         // Dark Navy + Cyan - Crypto Native Theme
         navy: {
           50: '#f0f4f8',

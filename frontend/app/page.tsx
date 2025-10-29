@@ -12,9 +12,24 @@ import { mockMarkets } from '@/components/MockData';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
+interface Market {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  creator_address: string;
+  created_at: string;
+  ends_at: string;
+  total_agree_stakes: number;
+  total_disagree_stakes: number;
+  status?: string;
+  winner?: number;
+  resolved?: boolean;
+}
+
 export default function Home() {
-  const [markets, setMarkets] = useState([]);
-  const [filteredMarkets, setFilteredMarkets] = useState([]);
+  const [markets, setMarkets] = useState<Market[]>([]);
+  const [filteredMarkets, setFilteredMarkets] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const [sort, setSort] = useState('trending');
   const [category, setCategory] = useState('');
@@ -65,10 +80,14 @@ export default function Home() {
       }
       
       const sorted = sort === 'trending' 
-        ? [...filtered].sort((a, b) => (b.total_agree_stakes + b.total_disagree_stakes) - (a.total_agree_stakes + a.total_disagree_stakes))
+        ? [...filtered].sort(
+            (a, b) =>
+              ((b as any).total_agree_stakes + (b as any).total_disagree_stakes) -
+              ((a as any).total_agree_stakes + (a as any).total_disagree_stakes)
+          )
         : filtered;
-      setMarkets(sorted);
-      setFilteredMarkets(sorted);
+      setMarkets(sorted as typeof mockMarkets);
+      setFilteredMarkets(sorted as typeof mockMarkets);
     } finally {
       setLoading(false);
     }
@@ -85,20 +104,15 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-black h-screen overflow-y-auto">
       {/* Header - Polymarket Style */}
-      <header className="bg-white sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6">
+      <header className="bg-black sticky top-0 z-50 shadow-sm border-b border-gray-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
           {/* Top Section */}
-          <div className="flex items-center justify-between py-4 border-b border-gray-100">
-            <div className="flex items-center gap-2">
-              <Link href="/" className="flex items-center gap-3">
-                <svg width="32" height="24" viewBox="0 0 32 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <ellipse cx="16" cy="12" rx="14" ry="10" stroke="#111827" strokeWidth="2"/>
-                  <ellipse cx="16" cy="12" rx="10" ry="6" stroke="#111827" strokeWidth="1.5"/>
-                  <ellipse cx="16" cy="12" rx="6" ry="3" stroke="#111827" strokeWidth="1"/>
-                </svg>
-                <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">elliptic</h1>
+          <div className="flex items-center justify-between py-4 border-b border-gray-800">
+            <div className="flex items-center gap-2 flex-shrink-0 w-[200px]">
+              <Link href="/" className="flex items-center justify-center w-full">
+                <h1 className="text-2xl font-semibold bg-gradient-to-r from-[#2952FF] to-[#00D07E] bg-clip-text text-transparent tracking-tight">nu</h1>
               </Link>
             </div>
             
@@ -109,7 +123,7 @@ export default function Home() {
                   placeholder="Search markets..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-gray-50 rounded-lg text-sm outline-none focus:bg-white focus:ring-2 focus:ring-cyan-500 transition-all pl-10"
+                  className="w-full px-4 py-2.5 bg-black border border-gray-800 rounded-lg text-sm outline-none focus:bg-black focus:ring-2 focus:ring-[#2952FF] transition-all pl-10 text-white placeholder-gray-500"
                 />
                 <svg className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -120,7 +134,7 @@ export default function Home() {
             <div className="flex items-center gap-6">
               <button 
                 onClick={() => setShowHowItWorks(true)}
-                className="flex items-center gap-2 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                className="flex items-center gap-2 text-[#00D07E] hover:text-[#00D07E]/80 text-sm font-medium"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -141,10 +155,10 @@ export default function Home() {
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setSort(sort === 'resolved' ? '' : 'resolved')}
-                className={`px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors rounded-lg ${
+                className={`px-4 py-2 text-sm font-semibold whitespace-nowrap transition-all rounded-full ${
                   sort === 'resolved'
-                    ? 'bg-gray-900 text-white'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    ? 'bg-gradient-to-r from-[#2952FF] to-[#00D07E] text-white shadow-lg'
+                    : 'text-gray-500 hover:text-white hover:bg-gray-900'
                 }`}
               >
                 Resolved
@@ -152,26 +166,26 @@ export default function Home() {
 
               <button
                 onClick={() => setSort(sort === 'trending' ? '' : 'trending')}
-                className={`px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors rounded-lg ${
+                className={`px-4 py-2 text-sm font-semibold whitespace-nowrap transition-all rounded-full ${
                   sort === 'trending'
-                    ? 'bg-gray-900 text-white'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    ? 'bg-gradient-to-r from-[#2952FF] to-[#00D07E] text-white shadow-lg'
+                    : 'text-gray-500 hover:text-white hover:bg-gray-900'
                 }`}
               >
                 Trending
               </button>
             </div>
 
-            <div className="w-px h-6 bg-gray-200"></div>
+            <div className="w-px h-6 bg-gray-800"></div>
 
             {categories.slice(1).map((cat) => (
               <button
                 key={cat.value}
                 onClick={() => setCategory(category === cat.value ? '' : cat.value)}
-                className={`px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors rounded-lg ${
+                className={`px-4 py-2 text-sm font-semibold whitespace-nowrap transition-all rounded-full ${
                   category === cat.value
-                    ? 'bg-gray-900 text-white'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    ? 'bg-gradient-to-r from-[#2952FF] to-[#00D07E] text-white shadow-lg'
+                    : 'text-gray-500 hover:text-white hover:bg-gray-900'
                 }`}
               >
                 {cat.label}
@@ -186,7 +200,7 @@ export default function Home() {
                 }
                 setShowCreateModal(true);
               }}
-              className="ml-auto px-4 py-2 text-sm font-medium bg-gradient-to-r from-cyan-600 to-cyan-500 text-white rounded-lg hover:opacity-90 whitespace-nowrap"
+              className="ml-auto px-4 py-2 text-sm font-medium bg-gradient-to-r from-[#2952FF] to-[#00D07E] text-white rounded-lg hover:opacity-90 whitespace-nowrap"
             >
               + Post Your Take
             </button>
@@ -200,19 +214,19 @@ export default function Home() {
         {loading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[...Array(8)].map((_, i) => (
-              <div key={i} className="bg-white rounded-xl shadow-sm p-6 animate-pulse border border-gray-100">
-                <div className="h-6 bg-gray-200 rounded w-3/4 mb-3"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+              <div key={i} className="bg-black rounded-xl shadow-sm p-6 animate-pulse border border-gray-800">
+                <div className="h-6 bg-gray-900 rounded w-3/4 mb-3"></div>
+                <div className="h-4 bg-gray-900 rounded w-1/2"></div>
               </div>
             ))}
           </div>
         ) : markets.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-minimal border border-gray-50 p-16 text-center">
+          <div className="bg-black rounded-2xl shadow-minimal border border-gray-800 p-16 text-center">
             <p className="text-gray-400 text-lg">No active markets found</p>
             {isConnected && (
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="mt-6 px-6 py-3 bg-gradient-koi-purple text-white rounded-lg hover:opacity-90 font-medium shadow-minimal"
+                className="mt-6 px-6 py-3 bg-gradient-to-r from-[#2952FF] to-[#00D07E] text-white rounded-lg hover:opacity-90 font-medium shadow-minimal"
               >
                 Create First Market
               </button>

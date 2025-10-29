@@ -10,8 +10,8 @@ interface MarketCardProps {
     category: string;
     created_at: string;
     ends_at: string;
-    total_agree_stakes: number | string;
-    total_disagree_stakes: number | string;
+    total_agree_stakes: number;
+    total_disagree_stakes: number;
     creator_address: string;
     status?: string;
     winner?: number;
@@ -27,11 +27,9 @@ export default function MarketCard({ market, onBetClick }: MarketCardProps) {
 
   const isResolved = market.status === 'resolved' || new Date(market.ends_at).getTime() < Date.now();
   const isWinnerAgree = market.winner === 1;
-  const agreeStakes = typeof market.total_agree_stakes === 'string' ? parseFloat(market.total_agree_stakes) : market.total_agree_stakes;
-  const disagreeStakes = typeof market.total_disagree_stakes === 'string' ? parseFloat(market.total_disagree_stakes) : market.total_disagree_stakes;
-  const totalVolume = agreeStakes + disagreeStakes;
-  const agreePct = totalVolume > 0 ? (agreeStakes / totalVolume * 100).toFixed(0) : '0';
-  const disagreePct = totalVolume > 0 ? (disagreeStakes / totalVolume * 100).toFixed(0) : '0';
+  const totalVolume = parseFloat(market.total_agree_stakes) + parseFloat(market.total_disagree_stakes);
+  const agreePct = totalVolume > 0 ? (parseFloat(market.total_agree_stakes) / totalVolume * 100).toFixed(0) : '0';
+  const disagreePct = totalVolume > 0 ? (parseFloat(market.total_disagree_stakes) / totalVolume * 100).toFixed(0) : '0';
 
   const formatVolume = (volume: number) => {
     if (volume === 0) return '0.00';
@@ -48,12 +46,6 @@ export default function MarketCard({ market, onBetClick }: MarketCardProps) {
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     
-    // If less than 1 hour, only show minutes
-    if (hours === 0) {
-      return `${minutes}m`;
-    }
-    
-    // Show both hours and minutes
     return `${hours}h ${minutes}m`;
   };
 
@@ -69,8 +61,14 @@ export default function MarketCard({ market, onBetClick }: MarketCardProps) {
   }, [market.ends_at, isResolved]);
 
   const getCategoryColor = (category: string) => {
-    // Consistent styling for all categories
-    return 'bg-gray-800 text-gray-300';
+    const colors: Record<string, string> = {
+      'music': 'bg-purple-100 text-purple-700',
+      'sports': 'bg-green-100 text-green-700',
+      'politics': 'bg-red-100 text-red-700',
+      'pop-culture': 'bg-pink-100 text-pink-700',
+      'other': 'bg-gray-100 text-gray-700',
+    };
+    return colors[category] || colors['other'];
   };
 
   const handleIncrement = (amount: number) => {
@@ -118,58 +116,58 @@ export default function MarketCard({ market, onBetClick }: MarketCardProps) {
   };
 
   return (
-    <div className="bg-gray-900 rounded-2xl shadow-sm hover:shadow-xl hover:scale-[1.02] transition-all flex flex-col overflow-hidden h-full">
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-all flex flex-col overflow-hidden">
       {/* Header with Category and Status */}
-      <div className="px-6 pt-5 pb-4 flex items-center justify-between">
+      <div className="px-6 pt-4 pb-3 flex items-center justify-between">
         <span className={`px-3 py-1 rounded-full text-xs font-medium ${getCategoryColor(market.category)}`}>
           {market.category}
         </span>
         {isResolved ? (
           <span className={`px-3 py-1 rounded-full text-xs font-medium flex items-center gap-1.5 ${
-            isWinnerAgree ? 'bg-[#00D07E]/20 text-[#00D07E]' : 'bg-[#2952FF]/20 text-[#2952FF]'
+            isWinnerAgree ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
           }`}>
             <span className="text-base">{isWinnerAgree ? '✅' : '❌'}</span>
             {isWinnerAgree ? 'AGREED WON' : 'DISAGREED WON'} ({isWinnerAgree ? agreePct : disagreePct}%)
           </span>
         ) : (
-          <span className="px-3 py-1 rounded-full text-xs font-medium bg-[#00D07E]/20 text-[#00D07E] flex items-center gap-1.5">
-            <span className="w-2 h-2 bg-[#00D07E] rounded-full"></span>
+          <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 flex items-center gap-1.5">
+            <span className="w-2 h-2 bg-green-600 rounded-full"></span>
             Live - {timeRemaining}
           </span>
         )}
       </div>
 
-      <div className="px-6 pb-4 space-y-4 flex flex-col relative" style={{ minHeight: '380px' }}>
+      <div className="px-6 pb-4 space-y-4">
         {/* Title */}
-        <h3 className="text-xl font-bold text-white leading-snug line-clamp-2 min-h-[3.5rem]">
+        <h3 className="text-lg font-bold text-gray-900 leading-tight">
           {market.title}
         </h3>
 
         {/* Stats - Volume and Time */}
-          <div className="flex items-center gap-8 pb-4">
+        <div className="flex items-center gap-8 pb-2 border-b border-gray-200">
+          <div>
+            <p className="text-xs text-gray-500 uppercase tracking-wide">Total Volume</p>
+            <p className="text-xl font-bold text-gray-900 mt-0.5">{formatVolume(totalVolume)} USDC</p>
+          </div>
+          {!isResolved && (
             <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Total Volume</p>
-              <p className="text-xl font-bold text-white mt-0.5">{formatVolume(totalVolume)} USDC</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wide">Ends In</p>
+              <p className="text-xl font-bold text-cyan-600 mt-0.5">{timeRemaining}</p>
             </div>
-            {!isResolved && (
-              <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Ends In</p>
-                <p className="text-xl font-bold text-[#00D07E] mt-0.5">{timeRemaining}</p>
-              </div>
           )}
         </div>
 
-          {/* Take a Position Section - Only show if not resolved */}
-          {!isResolved && (
-            <div className="space-y-4">
+        {/* Take a Position Section - Only show if not resolved */}
+        {!isResolved && (
+          <div className="space-y-3 pt-2">
             <div>
-              <h4 className="text-sm font-semibold text-white">Take a Position</h4>
-              <p className="text-xs text-gray-400 mt-0.5">Choose your side and enter amount</p>
+              <h4 className="text-sm font-semibold text-gray-900">Take a Position</h4>
+              <p className="text-xs text-gray-600 mt-0.5">Choose your side and enter amount</p>
             </div>
 
-            <div className="border-t border-gray-800 pt-3 flex items-center justify-between text-sm">
-              <span className="text-white font-medium">Your Wallet Balance</span>
-              <span className="text-gray-400">0.00 USDC</span>
+            <div className="border-t border-gray-200 pt-3 flex items-center justify-between text-sm">
+              <span className="text-gray-900 font-medium">Your Wallet Balance</span>
+              <span className="text-gray-700">0.00 USDC</span>
             </div>
 
             {/* Betting Buttons */}
@@ -182,16 +180,16 @@ export default function MarketCard({ market, onBetClick }: MarketCardProps) {
                   }
                 }}
                 disabled={isPlacingBet}
-                className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl transition-all font-medium ${
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg border-2 transition-all ${
                   selectedSide === 'agree'
-                    ? 'bg-[#00D07E]/20 border-[#00D07E] text-[#00D07E]'
-                    : 'bg-gray-800 hover:border-[#00D07E]/50 hover:bg-[#00D07E]/10 text-gray-400 border border-gray-700'
+                    ? 'bg-green-50 border-green-500 text-green-700'
+                    : 'bg-white border-gray-200 hover:border-green-300 text-gray-700'
                 } disabled:opacity-50`}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                <span>Agree</span>
+                <span className="font-semibold">Agree</span>
               </button>
 
               <button
@@ -202,67 +200,65 @@ export default function MarketCard({ market, onBetClick }: MarketCardProps) {
                   }
                 }}
                 disabled={isPlacingBet}
-                className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl transition-all font-medium ${
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg border-2 transition-all ${
                   selectedSide === 'disagree'
-                    ? 'bg-[#2952FF]/20 border-[#2952FF] text-[#2952FF]'
-                    : 'bg-gray-800 hover:border-[#2952FF]/50 hover:bg-[#2952FF]/10 text-gray-400 border border-gray-700'
+                    ? 'bg-red-50 border-red-500 text-red-700'
+                    : 'bg-white border-gray-200 hover:border-red-300 text-gray-700'
                 } disabled:opacity-50`}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
-                <span>Disagree</span>
+                <span className="font-semibold">Disagree</span>
               </button>
             </div>
 
-             {/* Amount Input - Only show when side is selected */}
-             {selectedSide ? (
-               <div className="space-y-3">
-                 <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-gray-800 border border-gray-700/50 focus-within:border-[#00D07E]/30 focus-within:bg-gray-750 transition-all">
-                   <input
-                     type="number"
-                     value={stakeAmount}
-                     onChange={(e) => setStakeAmount(e.target.value)}
-                     placeholder="0"
-                     className="flex-1 outline-none bg-transparent text-white text-lg font-semibold placeholder-gray-600 [-moz-appearance:_textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                     min="1"
-                     max="1000"
-                   />
-                   <span className="text-gray-400 text-sm font-medium">USDC</span>
-                   <div className="flex gap-1.5">
-                     <button
-                       onClick={() => handleIncrement(1)}
-                       className="px-3 py-1.5 bg-gray-700 hover:bg-[#00D07E]/20 hover:text-[#00D07E] rounded-lg text-xs text-gray-400 font-medium transition-all"
-                     >
-                       +1
-                     </button>
-                     <button
-                       onClick={() => handleIncrement(10)}
-                       className="px-3 py-1.5 bg-gray-700 hover:bg-[#00D07E]/20 hover:text-[#00D07E] rounded-lg text-xs text-gray-400 font-medium transition-all"
-                     >
-                       +10
-                     </button>
-                   </div>
-                 </div>
+            {/* Amount Input - Only show when side is selected */}
+            {selectedSide ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 bg-gray-50">
+                  <input
+                    type="number"
+                    value={stakeAmount}
+                    onChange={(e) => setStakeAmount(e.target.value)}
+                    placeholder="Enter amount"
+                    className="flex-1 outline-none bg-transparent text-gray-900 font-medium placeholder-gray-400"
+                    min="1"
+                    max="1000"
+                  />
+                  <span className="text-gray-500 text-sm font-medium">USDC</span>
+                  <button
+                    onClick={() => handleIncrement(1)}
+                    className="px-2.5 py-1 bg-white hover:bg-gray-100 rounded text-xs text-gray-700 font-medium transition-colors border border-gray-300"
+                  >
+                    +1
+                  </button>
+                  <button
+                    onClick={() => handleIncrement(10)}
+                    className="px-2.5 py-1 bg-white hover:bg-gray-100 rounded text-xs text-gray-700 font-medium transition-colors border border-gray-300"
+                  >
+                    +10
+                  </button>
+                </div>
 
-                 <button
-                   onClick={handlePlaceBet}
-                   disabled={!stakeAmount || isPlacingBet}
-                   className={`w-full py-3.5 rounded-xl font-semibold transition-all ${
-                     selectedSide === 'agree'
-                       ? 'bg-[#00D07E] hover:bg-[#00D07E]/90 text-white shadow-lg shadow-[#00D07E]/20'
-                       : 'bg-[#2952FF] hover:bg-[#2952FF]/90 text-white shadow-lg shadow-[#2952FF]/20'
-                   } disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none`}
-                 >
-                   {isPlacingBet ? 'Processing...' : 'Place Bet'}
-                 </button>
-               </div>
+                <button
+                  onClick={handlePlaceBet}
+                  disabled={!stakeAmount || isPlacingBet}
+                  className={`w-full py-3 rounded-lg font-semibold transition-all ${
+                    selectedSide === 'agree'
+                      ? 'bg-green-600 hover:bg-green-700 text-white'
+                      : 'bg-red-600 hover:bg-red-700 text-white'
+                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  {isPlacingBet ? 'Processing...' : 'Place Bet'}
+                </button>
+              </div>
             ) : (
               // Share Button - Only show when no side is selected
               <div className="flex justify-end">
                 <button 
                   onClick={handleShare}
-                  className="text-gray-400 hover:text-[#2952FF] transition-colors p-2 hover:bg-gray-900 rounded-lg"
+                  className="text-gray-400 hover:text-cyan-600 transition-colors"
                   aria-label="Share market"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -279,7 +275,7 @@ export default function MarketCard({ market, onBetClick }: MarketCardProps) {
           <div className="flex justify-end pt-2">
             <button 
               onClick={handleShare}
-              className="text-gray-400 hover:text-[#2952FF] transition-colors p-2 hover:bg-gray-900 rounded-lg"
+              className="text-gray-400 hover:text-cyan-600 transition-colors"
               aria-label="Share market"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

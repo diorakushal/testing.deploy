@@ -3,7 +3,7 @@ import "./globals.css";
 import Toaster from "./Toaster";
 
 export const metadata: Metadata = {
-  title: "elliptic - Opinion Market Platform",
+  title: "nu - Opinion Market Platform",
   description: "Social opinion market platform with blind voting and crypto staking",
 };
 

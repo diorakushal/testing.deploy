@@ -75,6 +75,8 @@ export default function PostTakeModal({ isOpen, onClose, marketId, marketTitle, 
   };
 
   const handleSwitchNetwork = async () => {
+    if (!window.ethereum) return;
+    
     try {
       toast.loading('Switching to Polygon...');
       
@@ -94,7 +96,7 @@ export default function PostTakeModal({ isOpen, onClose, marketId, marketTitle, 
       toast.dismiss();
       
       // If the chain hasn't been added to MetaMask yet, add it
-      if (switchError.code === 4902) {
+      if (switchError.code === 4902 && window.ethereum) {
         try {
           await window.ethereum.request({
             method: 'wallet_addEthereumChain',
@@ -370,8 +372,8 @@ export default function PostTakeModal({ isOpen, onClose, marketId, marketTitle, 
                     onClick={() => setSelectedSide('agree')}
                     className={`w-full py-4 px-4 rounded-lg border-2 transition-all ${
                       selectedSide === 'agree'
-                        ? 'bg-green-50 border-green-500 text-green-700'
-                        : 'border-gray-200 hover:border-green-300 text-gray-700'
+                        ? 'bg-[#00D07E]/20 border-[#00D07E] text-[#00D07E]'
+                        : 'border-gray-700 hover:border-[#00D07E] text-gray-300'
                     }`}
                   >
                     <div className="flex items-center gap-2">
@@ -387,8 +389,8 @@ export default function PostTakeModal({ isOpen, onClose, marketId, marketTitle, 
                     onClick={() => setSelectedSide('disagree')}
                     className={`w-full py-4 px-4 rounded-lg border-2 transition-all ${
                       selectedSide === 'disagree'
-                        ? 'bg-red-50 border-red-500 text-red-700'
-                        : 'border-gray-200 hover:border-red-300 text-gray-700'
+                        ? 'bg-[#2952FF]/20 border-[#2952FF] text-[#2952FF]'
+                        : 'border-gray-700 hover:border-[#2952FF] text-gray-300'
                     }`}
                   >
                     <div className="flex items-center gap-2">

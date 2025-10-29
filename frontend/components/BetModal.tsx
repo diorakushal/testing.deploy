@@ -59,6 +59,11 @@ export default function BetModal({ market, onClose, onSuccess }: BetModalProps) 
       return;
     }
 
+    if (!window.ethereum) {
+      toast.error('Please install MetaMask');
+      return;
+    }
+
     try {
       setIsStaking(true);
       toast.loading('Preparing transaction...');

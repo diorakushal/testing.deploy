@@ -46,12 +46,7 @@ export default function MarketDetailPopup({ market, onClose }: MarketDetailPopup
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center gap-3">
-            <svg width="28" height="20" viewBox="0 0 32 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <ellipse cx="16" cy="12" rx="14" ry="10" stroke="#111827" strokeWidth="2"/>
-              <ellipse cx="16" cy="12" rx="10" ry="6" stroke="#111827" strokeWidth="1.5"/>
-              <ellipse cx="16" cy="12" rx="6" ry="3" stroke="#111827" strokeWidth="1"/>
-            </svg>
-            <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">elliptic</h1>
+            <h1 className="text-2xl font-semibold bg-gradient-to-r from-[#2952FF] to-[#00D07E] bg-clip-text text-transparent tracking-tight">nu</h1>
           </div>
           <button 
             onClick={onClose} 

@@ -12,10 +12,12 @@ interface User {
   wallet_address: string;
   username: string;
   markets_created: number;
-  total_staked: number;
-  total_earnings: number;
+  total_staked: number | string;
+  total_earnings: number | string;
   wins: number;
   losses: number;
+  markets?: any[];
+  stakes?: any[];
 }
 
 export default function ProfilePage() {
@@ -76,13 +78,8 @@ export default function ProfilePage() {
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <Link href="/" className="flex items-center gap-3">
-            <svg width="32" height="24" viewBox="0 0 32 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <ellipse cx="16" cy="12" rx="14" ry="10" stroke="#111827" strokeWidth="2"/>
-              <ellipse cx="16" cy="12" rx="10" ry="6" stroke="#111827" strokeWidth="1.5"/>
-              <ellipse cx="16" cy="12" rx="6" ry="3" stroke="#111827" strokeWidth="1"/>
-            </svg>
-            <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">
-              elliptic
+            <h1 className="text-2xl font-semibold bg-gradient-to-r from-[#2952FF] to-[#00D07E] bg-clip-text text-transparent tracking-tight">
+              nu
             </h1>
           </Link>
           <Link
@@ -112,13 +109,13 @@ export default function ProfilePage() {
                 <div className="p-4 bg-blue-50 rounded-lg">
                   <div className="text-sm text-gray-600 mb-1">Total Staked</div>
                   <div className="text-xl font-bold text-gray-900">
-                    ${parseFloat(user.total_staked).toLocaleString()}
+                    ${typeof user.total_staked === 'number' ? user.total_staked.toLocaleString() : parseFloat(user.total_staked.toString()).toLocaleString()}
                   </div>
                 </div>
                 <div className="p-4 bg-green-50 rounded-lg">
                   <div className="text-sm text-gray-600 mb-1">Total Earnings</div>
                   <div className="text-xl font-bold text-gray-900">
-                    ${parseFloat(user.total_earnings).toLocaleString()}
+                    ${typeof user.total_earnings === 'number' ? user.total_earnings.toLocaleString() : parseFloat(user.total_earnings.toString()).toLocaleString()}
                   </div>
                 </div>
               </div>
@@ -154,7 +151,7 @@ export default function ProfilePage() {
         {/* Markets Created */}
         <div className="bg-white rounded-xl shadow-sm p-6">
           <h3 className="text-xl font-bold mb-4">Your Markets</h3>
-          {user.markets?.length > 0 ? (
+          {user.markets && user.markets.length > 0 ? (
             <div className="space-y-3">
               {user.markets.map((market: any) => (
                 <Link
@@ -187,7 +184,7 @@ export default function ProfilePage() {
         {/* Recent Stakes */}
         <div className="bg-white rounded-xl shadow-sm p-6 mt-6">
           <h3 className="text-xl font-bold mb-4">Recent Stakes</h3>
-          {user.stakes?.length > 0 ? (
+          {user.stakes && user.stakes.length > 0 ? (
             <div className="space-y-3">
               {user.stakes.map((stake: any) => (
                 <div
@@ -207,7 +204,7 @@ export default function ProfilePage() {
                       </div>
                       {stake.resolved && stake.payout && (
                         <div className={`text-sm ${stake.side === stake.winner ? 'text-green-600' : 'text-red-600'}`}>
-                          {stake.side === stake.winner ? `+${parseFloat(stake.payout - stake.amount).toLocaleString()}` : `-${parseFloat(stake.amount).toLocaleString()}`}
+                          {stake.side === stake.winner ? `+${(typeof stake.payout === 'number' ? stake.payout : parseFloat(stake.payout)) - (typeof stake.amount === 'number' ? stake.amount : parseFloat(stake.amount))}` : `-${typeof stake.amount === 'number' ? stake.amount.toLocaleString() : parseFloat(stake.amount).toLocaleString()}`}
                         </div>
                       )}
                     </div>
