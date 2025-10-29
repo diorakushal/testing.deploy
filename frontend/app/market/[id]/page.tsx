@@ -92,7 +92,7 @@ export default function MarketDetail() {
               <span className="text-sm font-medium">Back to Markets</span>
             </Link>
             <Link href="/" className="absolute left-1/2 transform -translate-x-1/2 flex items-center gap-3">
-              <h1 className="text-2xl font-semibold bg-gradient-to-r from-[#2952FF] to-[#00D07E] bg-clip-text text-transparent tracking-tight">nu</h1>
+              <h1 className="text-2xl font-semibold bg-gradient-to-r from-[#2952FF] to-[#00D07E] bg-clip-text text-transparent tracking-tight">nusense</h1>
             </Link>
             <div className="w-32"></div>
           </div>

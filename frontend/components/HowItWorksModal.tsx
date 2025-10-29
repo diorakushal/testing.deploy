@@ -16,7 +16,7 @@ export default function HowItWorksModal({ isOpen, onClose }: HowItWorksModalProp
       >
         {/* Header */}
         <div className="sticky top-0 bg-black border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-white">How <span className="bg-gradient-to-r from-[#2952FF] to-[#00D07E] bg-clip-text text-transparent">nu</span> Works</h2>
+          <h2 className="text-2xl font-bold text-white">How <span className="bg-gradient-to-r from-[#2952FF] to-[#00D07E] bg-clip-text text-transparent">nusense</span> Works</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-300 transition-colors"

@@ -112,7 +112,7 @@ export default function Home() {
           <div className="flex items-center justify-between py-4 border-b border-gray-800">
             <div className="flex items-center gap-2 flex-shrink-0 w-[200px]">
               <Link href="/" className="flex items-center justify-center w-full">
-                <h1 className="text-2xl font-semibold bg-gradient-to-r from-[#2952FF] to-[#00D07E] bg-clip-text text-transparent tracking-tight">nu</h1>
+                <h1 className="text-2xl font-semibold bg-gradient-to-r from-[#2952FF] to-[#00D07E] bg-clip-text text-transparent tracking-tight">nusense</h1>
               </Link>
             </div>
             

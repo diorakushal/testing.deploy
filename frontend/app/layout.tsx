@@ -3,7 +3,7 @@ import "./globals.css";
 import Toaster from "./Toaster";
 
 export const metadata: Metadata = {
-  title: "nu - Opinion Market Platform",
+  title: "nusense - Opinion Market Platform",
   description: "Social opinion market platform with blind voting and crypto staking",
 };
 
