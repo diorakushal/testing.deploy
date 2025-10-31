@@ -232,7 +232,7 @@ export default function CreateMarketModal({ onClose, onSuccess }: CreateMarketMo
                   onChange={handleDescriptionChange}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent resize-none"
                   rows={3}
-                  placeholder="Add context to your opinion..."
+                  placeholder="Add context to your take..."
                   disabled={loading}
                   maxLength={500}
                 />

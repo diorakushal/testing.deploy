@@ -8,6 +8,8 @@ import MarketCard from '@/components/MarketCard';
 import CreateMarketModal from '@/components/CreateMarketModal';
 import HowItWorksModal from '@/components/HowItWorksModal';
 import PostTakeModal from '@/components/PostTakeModal';
+// Fallback to relative path to ensure resolution in all environments
+import CreateMarketSidebar from '../components/CreateMarketSidebar';
 import { mockMarkets } from '@/components/MockData';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
@@ -37,7 +39,7 @@ export default function Home() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [showPostTake, setShowPostTake] = useState(false);
-  const [postTakeMarket, setPostTakeMarket] = useState<{id: string, title: string, data?: any} | null>(null);
+  const [postTakeMarket, setPostTakeMarket] = useState<{id: string, title: string, initialSide?: 'agree' | 'disagree', initialAmount?: string, data?: any} | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [connectedAddress, setConnectedAddress] = useState<string | undefined>();
 
@@ -95,7 +97,6 @@ export default function Home() {
 
 
   const categories = [
-    { value: '', label: 'All' },
     { value: 'music', label: 'Music' },
     { value: 'sports', label: 'Sports' },
     { value: 'politics', label: 'Politics' },
@@ -104,33 +105,22 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen bg-black h-screen overflow-y-auto">
+    <div className="min-h-screen bg-white h-screen overflow-y-auto">
       {/* Header - Polymarket Style */}
-      <header className="bg-black sticky top-0 z-50 shadow-sm border-b border-gray-800">
+      <header className="bg-white z-50 shadow-sm border-b border-gray-200 m-0">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           {/* Top Section */}
-          <div className="flex items-center justify-between py-4 border-b border-gray-800">
-            <div className="flex items-center gap-2 flex-shrink-0 w-[200px]">
-              <Link href="/" className="flex items-center justify-center w-full">
-                <h1 className="text-2xl font-semibold bg-gradient-to-r from-[#2952FF] to-[#00D07E] bg-clip-text text-transparent tracking-tight">nusense</h1>
+          <div className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-2 flex-shrink-0 w-auto">
+              <Link href="/" className="flex items-center justify-start">
+                <h1 className="text-2xl font-semibold text-black tracking-tight">nusense</h1>
               </Link>
             </div>
-            
-            <div className="flex-1 mx-8 max-w-2xl">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search markets..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-black border border-gray-800 rounded-lg text-sm outline-none focus:bg-black focus:ring-2 focus:ring-[#2952FF] transition-all pl-10 text-white placeholder-gray-500"
-                />
-                <svg className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-            </div>
 
+            <div className="flex-1 mx-8">
+              <p className="text-sm text-gray-600 text-center">Winner determined by stake-weighted algorithm</p>
+            </div>
+            
             <div className="flex items-center gap-6">
               <button 
                 onClick={() => setShowHowItWorks(true)}
@@ -150,15 +140,31 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Bottom Navigation - Category Filters */}
+          {/* Bottom Navigation - Search and Category Filters */}
           <div className="flex items-center gap-6 py-2 overflow-x-auto">
-            <div className="flex items-center gap-4">
+            {/* Search moved below the name into the filter container */}
+            <div className="flex-1 max-w-3xl">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search markets..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-sm outline-none focus:bg-white focus:ring-2 focus:ring-gray-400 transition-all pl-10 text-black placeholder-gray-500"
+                />
+                <svg className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-6">
               <button
                 onClick={() => setSort(sort === 'resolved' ? '' : 'resolved')}
-                className={`px-4 py-2 text-sm font-semibold whitespace-nowrap transition-all rounded-full ${
+                className={`px-3 pb-3 -mb-px text-sm font-semibold whitespace-nowrap transition-colors border-b-2 ${
                   sort === 'resolved'
-                    ? 'bg-gradient-to-r from-[#2952FF] to-[#00D07E] text-white shadow-lg'
-                    : 'text-gray-500 hover:text-white hover:bg-gray-900'
+                    ? 'text-black border-black'
+                    : 'text-gray-600 border-transparent hover:text-black hover:border-gray-400'
                 }`}
               >
                 Resolved
@@ -166,82 +172,83 @@ export default function Home() {
 
               <button
                 onClick={() => setSort(sort === 'trending' ? '' : 'trending')}
-                className={`px-4 py-2 text-sm font-semibold whitespace-nowrap transition-all rounded-full ${
+                className={`px-3 pb-3 -mb-px text-sm font-semibold whitespace-nowrap transition-colors border-b-2 ${
                   sort === 'trending'
-                    ? 'bg-gradient-to-r from-[#2952FF] to-[#00D07E] text-white shadow-lg'
-                    : 'text-gray-500 hover:text-white hover:bg-gray-900'
+                    ? 'text-black border-black'
+                    : 'text-gray-600 border-transparent hover:text-black hover:border-gray-400'
                 }`}
               >
                 Trending
               </button>
             </div>
 
-            <div className="w-px h-6 bg-gray-800"></div>
+            <div className="w-px h-6 bg-gray-300 mx-1"></div>
 
-            {categories.slice(1).map((cat) => (
+            {categories.map((cat) => (
               <button
                 key={cat.value}
                 onClick={() => setCategory(category === cat.value ? '' : cat.value)}
-                className={`px-4 py-2 text-sm font-semibold whitespace-nowrap transition-all rounded-full ${
+                className={`px-3 pb-3 -mb-px text-sm font-semibold whitespace-nowrap transition-colors border-b-2 ${
                   category === cat.value
-                    ? 'bg-gradient-to-r from-[#2952FF] to-[#00D07E] text-white shadow-lg'
-                    : 'text-gray-500 hover:text-white hover:bg-gray-900'
+                    ? 'text-black border-black'
+                    : 'text-gray-600 border-transparent hover:text-black hover:border-gray-400'
                 }`}
               >
                 {cat.label}
               </button>
             ))}
 
-            <button
-              onClick={() => {
-                if (!isConnected) {
-                  alert('Please connect your wallet first to create a market');
-                  return;
-                }
-                setShowCreateModal(true);
-              }}
-              className="ml-auto px-4 py-2 text-sm font-medium bg-gradient-to-r from-[#2952FF] to-[#00D07E] text-white rounded-lg hover:opacity-90 whitespace-nowrap"
-            >
-              + Post Your Take
-            </button>
           </div>
         </div>
       </header>
 
-      {/* Main Content - Polymarket Style 3-Column Grid */}
-      <main className="max-w-7xl mx-auto px-6 py-6">
-        {/* Markets Grid - 3 columns like Polymarket */}
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[350px_1fr] gap-6">
+          {/* Create Market Sidebar */}
+          <div className="hidden lg:block">
+            <div className="sticky top-6 bg-white border border-gray-200 rounded-2xl overflow-hidden">
+              <CreateMarketSidebar onSuccess={fetchMarkets} />
+            </div>
+          </div>
+
+          {/* Main Feed */}
+          <div className="flex flex-col gap-0">
+            {/* Markets Grid */}
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="flex flex-col gap-0">
             {[...Array(8)].map((_, i) => (
-              <div key={i} className="bg-black rounded-xl shadow-sm p-6 animate-pulse border border-gray-800">
-                <div className="h-6 bg-gray-900 rounded w-3/4 mb-3"></div>
-                <div className="h-4 bg-gray-900 rounded w-1/2"></div>
+              <div key={i} className="bg-white rounded-xl shadow-sm p-6 animate-pulse border border-gray-200">
+                <div className="h-6 bg-gray-200 rounded w-3/4 mb-3"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
               </div>
             ))}
           </div>
         ) : markets.length === 0 ? (
-          <div className="bg-black rounded-2xl shadow-minimal border border-gray-800 p-16 text-center">
-            <p className="text-gray-400 text-lg">No active markets found</p>
+          <div className="text-center py-16">
+            <p className="text-gray-600 text-lg">No active markets found</p>
             {isConnected && (
               <button
                 onClick={() => setShowCreateModal(true)}
-                className="mt-6 px-6 py-3 bg-gradient-to-r from-[#2952FF] to-[#00D07E] text-white rounded-lg hover:opacity-90 font-medium shadow-minimal"
+                className="mt-6 px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800 font-medium"
               >
                 Create First Market
               </button>
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="flex flex-col gap-0">
             {(searchQuery ? filteredMarkets : markets).map((market: any) => (
               <MarketCard 
                 key={market.id} 
                 market={market}
-                onBetClick={(marketId, marketTitle) => {
+                userAddress={connectedAddress}
+                onBetClick={(marketId, marketTitle, side, amount) => {
                   setPostTakeMarket({ 
                     id: marketId, 
                     title: marketTitle,
+                    initialSide: side,
+                    initialAmount: amount,
                     data: {
                       total_agree_stakes: market.total_agree_stakes,
                       total_disagree_stakes: market.total_disagree_stakes
@@ -253,7 +260,11 @@ export default function Home() {
             ))}
           </div>
         )}
+          </div>
+        </div>
       </main>
+
+      {/* Floating + Button removed per new inline composer */}
 
       {/* Create Market Modal */}
       {showCreateModal && (
@@ -283,6 +294,8 @@ export default function Home() {
         marketTitle={postTakeMarket?.title}
         userAddress={connectedAddress}
         marketData={postTakeMarket?.data}
+        initialSide={postTakeMarket?.initialSide}
+        initialAmount={postTakeMarket?.initialAmount}
       />
 
     </div>

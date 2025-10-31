@@ -14,6 +14,8 @@ interface PostTakeModalProps {
     total_agree_stakes: number;
     total_disagree_stakes: number;
   };
+  initialSide?: 'agree' | 'disagree';
+  initialAmount?: string;
 }
 
 // Contract addresses (should be in .env)
@@ -37,7 +39,7 @@ const DOXA_ABI = [
   'event StakePlaced(address indexed user, uint256 indexed marketId, uint256 amount, uint8 side)'
 ];
 
-export default function PostTakeModal({ isOpen, onClose, marketId, marketTitle, userAddress, marketData }: PostTakeModalProps) {
+export default function PostTakeModal({ isOpen, onClose, marketId, marketTitle, userAddress, marketData, initialSide, initialAmount }: PostTakeModalProps) {
   const [step, setStep] = useState<'network' | 'approve' | 'betting' | 'confirming' | 'success'>('network');
   const [selectedSide, setSelectedSide] = useState<'agree' | 'disagree' | null>(null);
   const [amount, setAmount] = useState('');
@@ -51,6 +53,18 @@ export default function PostTakeModal({ isOpen, onClose, marketId, marketTitle, 
       checkNetwork();
     }
   }, [isOpen, userAddress]);
+
+  useEffect(() => {
+    if (isOpen && initialSide) {
+      setSelectedSide(initialSide);
+    }
+  }, [isOpen, initialSide]);
+
+  useEffect(() => {
+    if (isOpen && initialAmount) {
+      setAmount(initialAmount);
+    }
+  }, [isOpen, initialAmount]);
 
   const checkNetwork = async () => {
     if (!window.ethereum) {

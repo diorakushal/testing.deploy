@@ -86,12 +86,12 @@ export default function WalletConnect({ onConnect }: WalletConnectProps) {
   return (
     <div className="flex items-center gap-3">
       <div className="text-right">
-        <div className="text-sm font-medium text-white">{formatAddress(account)}</div>
-        <div className="text-xs text-gray-400">{parseFloat(balance).toFixed(4)} MATIC</div>
+        <div className="text-sm font-medium text-black">{formatAddress(account)}</div>
+        <div className="text-xs text-gray-600">{parseFloat(balance).toFixed(4)} MATIC</div>
       </div>
       <button
         onClick={disconnect}
-        className="px-4 py-2 text-xs font-medium text-gray-400 hover:text-white bg-gray-900 hover:bg-gray-800 rounded-full transition-all border border-gray-800"
+        className="px-4 py-2 text-xs font-medium text-gray-600 hover:text-black bg-gray-100 hover:bg-gray-200 rounded-full transition-all border border-gray-300"
       >
         Disconnect
       </button>
