@@ -89,20 +89,21 @@ export default function MarketDetail() {
 
   return (
     <div className="min-h-screen bg-white h-screen overflow-y-auto">
-      {/* Header - Matching Home Feed */}
-      <header className="bg-white z-50 m-0">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between py-4">
-            <Link href="/" className="flex items-center gap-2 text-gray-600 hover:text-black transition-colors">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+      {/* Header - Enhanced Design */}
+      <header className="bg-white z-50 border-b border-gray-100 sticky top-0 backdrop-blur-sm bg-white/95">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between py-3 sm:py-4">
+            <Link href="/" className="flex items-center gap-2 text-gray-600 hover:text-black transition-colors duration-200 group">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5 transition-transform duration-200 group-hover:-translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
-              <span className="text-sm font-medium">Back to Markets</span>
+              <span className="text-xs sm:text-sm font-semibold hidden sm:inline">Back to Markets</span>
+              <span className="text-xs sm:text-sm font-semibold sm:hidden">Back</span>
             </Link>
-            <Link href="/" className="absolute left-1/2 transform -translate-x-1/2 flex items-center justify-start">
-              <h1 className="text-2xl font-semibold text-black tracking-tight">nusense</h1>
+            <Link href="/" className="absolute left-1/2 transform -translate-x-1/2 flex items-center justify-start group">
+              <h1 className="text-2xl sm:text-3xl font-bold text-black tracking-tight transition-transform duration-200 group-hover:scale-105">numo</h1>
             </Link>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 sm:gap-4">
               <WalletConnect 
                 onConnect={(address: string) => {
                   setIsConnected(true);

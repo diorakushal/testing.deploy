@@ -680,6 +680,310 @@ app.post('/api/markets/:marketId/distribute-winnings', async (req, res) => {
   }
 });
 
+// ========== PAYMENT REQUESTS API ENDPOINTS ==========
+
+// Seed mock payment requests (development only)
+app.post('/api/payment-requests/seed', async (req, res) => {
+  try {
+    // First, ensure table exists
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS payment_requests (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        requester_address VARCHAR(255) NOT NULL,
+        amount NUMERIC(20, 6) NOT NULL,
+        token_symbol VARCHAR(10) DEFAULT 'USDC',
+        token_address VARCHAR(255) NOT NULL,
+        chain_id VARCHAR(50) NOT NULL,
+        chain_name VARCHAR(50) NOT NULL,
+        caption TEXT,
+        status VARCHAR(20) DEFAULT 'open',
+        paid_by VARCHAR(255),
+        tx_hash VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        paid_at TIMESTAMP
+      );
+    `);
+
+    const mockRequests = [
+      {
+        requester_address: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+        amount: 50,
+        token_symbol: 'USDC',
+        token_address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+        chain_id: '8453',
+        chain_name: 'Base',
+        caption: 'tacos 🌮',
+        status: 'open'
+      },
+      {
+        requester_address: '0x8ba1f109551bD432803012645Hac136c2C1c',
+        amount: 25,
+        token_symbol: 'USDC',
+        token_address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+        chain_id: '8453',
+        chain_name: 'Base',
+        caption: 'Rent share for this month',
+        status: 'open'
+      },
+      {
+        requester_address: '0x5c0d3b8a7d9e1F2f4a6B8d5e4c7a3B9d1E2f4a6',
+        amount: 100,
+        token_symbol: 'USDC',
+        token_address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+        chain_id: '8453',
+        chain_name: 'Base',
+        caption: 'Design commission',
+        status: 'open'
+      },
+      {
+        requester_address: '0x3a7b9c2d4e5f6a8b9c1d2e3f4a5b6c7d8e9f0a1b',
+        amount: 75,
+        token_symbol: 'USDC',
+        token_address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+        chain_id: '8453',
+        chain_name: 'Base',
+        caption: 'Pay me back for drinks',
+        status: 'paid',
+        paid_by: '0x9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0',
+        tx_hash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
+      },
+      {
+        requester_address: '0x2b4d6f8a9c1e3d5f7b9a2c4e6f8a1b3d5c7e9f2b',
+        amount: 200,
+        token_symbol: 'USDC',
+        token_address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+        chain_id: '8453',
+        chain_name: 'Base',
+        caption: 'Freelance work completed',
+        status: 'paid',
+        paid_by: '0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b',
+        tx_hash: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890'
+      },
+      {
+        requester_address: '0x1f2e3d4c5b6a7980f1e2d3c4b5a6978f0e1d2c3b',
+        amount: 150,
+        token_symbol: 'USDT',
+        token_address: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
+        chain_id: '8453',
+        chain_name: 'Base',
+        caption: 'Music production fee',
+        status: 'open'
+      },
+      {
+        requester_address: '0x9e8d7c6b5a4938271f0e1d2c3b4a5968f7e6d5c4b',
+        amount: 300,
+        token_symbol: 'USDC',
+        token_address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+        chain_id: '1',
+        chain_name: 'Ethereum',
+        caption: 'DAO reimbursement',
+        status: 'open'
+      }
+    ];
+
+    const inserted = [];
+    for (const request of mockRequests) {
+      try {
+        const result = await pool.query(
+          `INSERT INTO payment_requests (
+            requester_address, amount, token_symbol, token_address, 
+            chain_id, chain_name, caption, status, paid_by, tx_hash
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          RETURNING *`,
+          [
+            request.requester_address,
+            request.amount,
+            request.token_symbol,
+            request.token_address,
+            request.chain_id,
+            request.chain_name,
+            request.caption,
+            request.status,
+            request.paid_by || null,
+            request.tx_hash || null
+          ]
+        );
+        inserted.push(result.rows[0]);
+      } catch (err) {
+        // Skip if already exists
+        if (!err.message.includes('duplicate')) {
+          console.error('Error inserting mock request:', err);
+        }
+      }
+    }
+
+    res.json({ message: `Seeded ${inserted.length} payment requests`, requests: inserted });
+  } catch (error) {
+    console.error('Error seeding payment requests:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all payment requests
+app.get('/api/payment-requests', async (req, res) => {
+  try {
+    const { status, requester_address } = req.query;
+    
+    let query = 'SELECT * FROM payment_requests WHERE 1=1';
+    const params = [];
+    
+    // Only filter by status if explicitly provided
+    if (status) {
+      query += ` AND status = $${params.length + 1}`;
+      params.push(status);
+    }
+    
+    if (requester_address) {
+      query += ` AND requester_address = $${params.length + 1}`;
+      params.push(requester_address);
+    }
+    
+    query += ' ORDER BY created_at DESC LIMIT 50';
+    
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching payment requests:', error);
+    // If table doesn't exist, return empty array instead of error
+    if (error.message && error.message.includes('does not exist')) {
+      console.log('Payment requests table does not exist yet. Run the migration first.');
+      return res.json([]);
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get single payment request
+app.get('/api/payment-requests/:id', async (req, res) => {
+  try {
+    const requestId = req.params.id;
+    
+    // Try to query by ID (handles both UUID and string IDs)
+    let result;
+    try {
+      result = await pool.query(
+        'SELECT * FROM payment_requests WHERE id = $1',
+        [requestId]
+      );
+    } catch (dbError) {
+      // If table doesn't exist or query fails, return 404
+      console.error('Database error:', dbError);
+      return res.status(404).json({ error: 'Payment request not found' });
+    }
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Payment request not found' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error fetching payment request:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create payment request
+app.post('/api/payment-requests', async (req, res) => {
+  try {
+    const {
+      requesterAddress,
+      amount,
+      tokenSymbol = 'USDC',
+      tokenAddress,
+      chainId,
+      chainName,
+      caption
+    } = req.body;
+    
+    // Validate required fields
+    if (!requesterAddress || !amount || !tokenAddress || !chainId || !chainName) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    if (parseFloat(amount) <= 0) {
+      return res.status(400).json({ error: 'Amount must be greater than 0' });
+    }
+    
+    const result = await pool.query(
+      `INSERT INTO payment_requests (
+        requester_address, amount, token_symbol, token_address, 
+        chain_id, chain_name, caption, status
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'open')
+      RETURNING *`,
+      [
+        requesterAddress,
+        amount,
+        tokenSymbol,
+        tokenAddress,
+        chainId,
+        chainName,
+        caption || null
+      ]
+    );
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating payment request:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update payment request status (mark as paid)
+app.patch('/api/payment-requests/:id/paid', async (req, res) => {
+  try {
+    const { txHash, paidBy } = req.body;
+    
+    if (!txHash || !paidBy) {
+      return res.status(400).json({ error: 'Missing txHash or paidBy' });
+    }
+    
+    const result = await pool.query(
+      `UPDATE payment_requests 
+       SET status = 'paid', paid_by = $1, tx_hash = $2, paid_at = CURRENT_TIMESTAMP
+       WHERE id = $3 AND status = 'open'
+       RETURNING *`,
+      [paidBy, txHash, req.params.id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Payment request not found or already paid' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating payment request:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Cancel payment request
+app.patch('/api/payment-requests/:id/cancel', async (req, res) => {
+  try {
+    const { requesterAddress } = req.body;
+    
+    if (!requesterAddress) {
+      return res.status(400).json({ error: 'Missing requesterAddress' });
+    }
+    
+    const result = await pool.query(
+      `UPDATE payment_requests 
+       SET status = 'cancelled'
+       WHERE id = $1 AND requester_address = $2 AND status = 'open'
+       RETURNING *`,
+      [req.params.id, requesterAddress]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Payment request not found or cannot be cancelled' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error cancelling payment request:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

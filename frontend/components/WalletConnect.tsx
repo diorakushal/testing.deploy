@@ -76,7 +76,7 @@ export default function WalletConnect({ onConnect }: WalletConnectProps) {
       <button
         onClick={connectWallet}
         disabled={isConnecting}
-        className="px-5 py-2.5 gradient-koi-purple text-white text-sm font-medium rounded-full hover:opacity-90 transition-all disabled:opacity-50 shadow-minimal"
+        className="px-4 sm:px-5 py-2 sm:py-2.5 bg-black text-white text-xs sm:text-sm font-semibold rounded-full hover:bg-gray-900 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md whitespace-nowrap"
       >
         {isConnecting ? 'Connecting...' : 'Connect Wallet'}
       </button>
@@ -84,14 +84,17 @@ export default function WalletConnect({ onConnect }: WalletConnectProps) {
   }
 
   return (
-    <div className="flex items-center gap-3">
-      <div className="text-right">
-        <div className="text-sm font-medium text-black">{formatAddress(account)}</div>
-        <div className="text-xs text-gray-600">{parseFloat(balance).toFixed(4)} MATIC</div>
+    <div className="flex items-center gap-2 sm:gap-3">
+      <div className="text-right hidden sm:block">
+        <div className="text-xs sm:text-sm font-semibold text-black leading-tight">{formatAddress(account)}</div>
+        <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5">{parseFloat(balance).toFixed(4)} MATIC</div>
+      </div>
+      <div className="text-right sm:hidden">
+        <div className="text-xs font-semibold text-black">{formatAddress(account)}</div>
       </div>
       <button
         onClick={disconnect}
-        className="px-4 py-2 text-xs font-medium text-gray-600 hover:text-black bg-gray-100 hover:bg-gray-200 rounded-full transition-all border border-gray-300"
+        className="px-3 sm:px-4 py-1.5 sm:py-2 text-[10px] sm:text-xs font-medium text-gray-600 hover:text-black bg-gray-100 hover:bg-gray-200 rounded-full transition-all duration-200 border border-gray-200 hover:border-gray-300 active:scale-95 whitespace-nowrap"
       >
         Disconnect
       </button>

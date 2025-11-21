@@ -46,7 +46,7 @@ export default function MarketDetailPopup({ market, onClose }: MarketDetailPopup
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
           <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold bg-gradient-to-r from-[#2952FF] to-[#00D07E] bg-clip-text text-transparent tracking-tight">nusense</h1>
+            <h1 className="text-2xl font-semibold bg-gradient-to-r from-[#2952FF] to-[#00D07E] bg-clip-text text-transparent tracking-tight">numo</h1>
           </div>
           <button 
             onClick={onClose} 

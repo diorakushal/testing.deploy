@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import Toaster from "./Toaster";
+import Providers from "@/components/WagmiProvider";
 
 export const metadata: Metadata = {
-  title: "nusense - Opinion Market Platform",
-  description: "Social opinion market platform with blind voting and crypto staking",
+  title: "numo - Crypto Requests",
+  description: "Request and send crypto payments easily",
 };
 
 export default function RootLayout({
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        {children}
+        <Providers>
+          {children}
+        </Providers>
         <Toaster />
       </body>
     </html>

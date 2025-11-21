@@ -2,33 +2,34 @@
 
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { ethers } from 'ethers';
+import { useAccount } from 'wagmi';
 import toast from 'react-hot-toast';
+import { AVAILABLE_CHAINS, getTokensForChain, getToken, getChainConfig, type TokenConfig } from '@/lib/tokenConfig';
+import GasFeeDisplay from './GasFeeDisplay';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '';
-
-const ABI = [
-  "function createMarket(string memory _title, address _stakingToken) returns (uint256)",
-  "function marketCounter() view returns (uint256)",
-];
 
 interface CreateMarketSidebarProps {
   onSuccess: () => void;
 }
 
 export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarProps) {
+  const { address, isConnected } = useAccount();
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    category: 'music',
-    tokenType: 'USDC'
+    amount: '',
+    caption: '',
+    chainId: 8453 as number | string, // Default to Base
+    tokenSymbol: 'USDC', // Default token
   });
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'form' | 'creating' | 'success'>('form');
-  const [createdMarketId, setCreatedMarketId] = useState<string | null>(null);
   const [charCount, setCharCount] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Get available tokens for selected chain
+  const availableTokens = getTokensForChain(formData.chainId);
+  const selectedToken = getToken(formData.tokenSymbol, formData.chainId);
+  const selectedChain = getChainConfig(formData.chainId);
 
   const adjustTextareaHeight = () => {
     if (textareaRef.current) {
@@ -37,23 +38,21 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
     }
   };
 
-  const handleTitleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const handleCaptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     if (value.length <= 300) {
-      setFormData({ ...formData, title: value });
+      setFormData({ ...formData, caption: value });
       setCharCount(value.length);
       adjustTextareaHeight();
     } else {
-      // If pasted text is too long, truncate it
       const truncated = value.slice(0, 300);
-      setFormData({ ...formData, title: truncated });
+      setFormData({ ...formData, caption: truncated });
       setCharCount(300);
       adjustTextareaHeight();
     }
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    // Let the paste happen first, then handle it in onChange
     setTimeout(() => {
       adjustTextareaHeight();
     }, 0);
@@ -61,15 +60,15 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
 
   useEffect(() => {
     adjustTextareaHeight();
-  }, [formData.title]);
+  }, [formData.caption]);
 
   const validateForm = () => {
-    if (!formData.title.trim() || formData.title.length < 5) {
-      toast.error('Opinion statement must be 5-300 characters');
+    if (!formData.amount || parseFloat(formData.amount) <= 0) {
+      toast.error('Please enter a valid amount');
       return false;
     }
-    if (!formData.category) {
-      toast.error('Please select a category');
+    if (parseFloat(formData.amount) < 0.01) {
+      toast.error('Minimum amount is 0.01 USDC');
       return false;
     }
     return true;
@@ -78,92 +77,56 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateForm()) return;
-
-    // Check wallet connection
-    if (typeof window.ethereum === 'undefined') {
-      toast.error('Please install MetaMask');
+    if (!isConnected || !address) {
+      toast.error('Please connect your wallet');
       return;
     }
+
+    if (!validateForm()) return;
 
     try {
       setLoading(true);
       setStep('creating');
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const address = await signer.getAddress();
+      toast.loading('Creating crypto request...');
 
-      // Determine token address
-      const tokenAddress = formData.tokenType === 'USDC' 
-        ? '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174'
-        : '0xc2132D05D31c914a87C6611C10748AEb04B58e8F';
+      if (!selectedToken || !selectedChain) {
+        toast.error('Invalid token or chain selection');
+        return;
+      }
 
-      // Step 1: Create market on blockchain
-      toast.loading('Creating market on blockchain...');
-      
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
-      const tx = await contract.createMarket(formData.title, tokenAddress);
-      const receipt = await tx.wait();
-
-      // Get market ID from counter
-      const marketCounter = await contract.marketCounter();
-      const marketId = (Number(marketCounter) - 1).toString();
-
-      setCreatedMarketId(marketId);
-
-      // Step 2: Save to database
-      const endsAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-      
-      await axios.post(`${API_URL}/markets`, {
-        creatorAddress: address,
-        title: formData.title,
-        description: formData.description,
-        category: formData.category,
-        agreeLabel: 'Agree',
-        disagreeLabel: 'Disagree',
-        endsAt: endsAt.toISOString(),
-        smartContractAddress: CONTRACT_ADDRESS,
-        tokenType: formData.tokenType
-      });
-
-      // Step 3: Create/update user
-      await axios.post(`${API_URL}/users`, {
-        walletAddress: address,
-        username: `user_${address.slice(0, 6)}`
+      await axios.post(`${API_URL}/payment-requests`, {
+        requesterAddress: address,
+        amount: formData.amount,
+        tokenSymbol: selectedToken.symbol,
+        tokenAddress: selectedToken.address,
+        chainId: formData.chainId,
+        chainName: selectedChain.name,
+        caption: formData.caption || null
       });
 
       toast.dismiss();
       setStep('success');
-      toast.success('Market created successfully!');
+      toast.success('Crypto request created!');
       
       // Reset form after a delay
       setTimeout(() => {
-        setFormData({ title: '', description: '', category: 'music', tokenType: 'USDC' });
+        setFormData({ amount: '', caption: '', chainId: 8453 as number | string, tokenSymbol: 'USDC' });
         setCharCount(0);
         setStep('form');
-        setCreatedMarketId(null);
         onSuccess();
       }, 2000);
     } catch (error: any) {
       toast.dismiss();
-      console.error('Error creating market:', error);
-      toast.error(error.message || 'Failed to create market');
+      console.error('Error creating payment request:', error);
+      toast.error(error.response?.data?.error || error.message || 'Failed to create crypto request');
       setStep('form');
       setLoading(false);
     }
   };
 
-  const categories = [
-    { value: 'music', label: 'Music' },
-    { value: 'sports', label: 'Sports' },
-    { value: 'politics', label: 'Politics' },
-    { value: 'pop-culture', label: 'Pop Culture' },
-    { value: 'other', label: 'Other' }
-  ];
-
   return (
-    <div className="p-4">
-      <h3 className="text-lg font-bold text-black tracking-tight mb-5 pb-3 border-b border-gray-200">Create Opinion Market</h3>
+    <div className="p-4 flex flex-col items-center">
+      <h3 className="text-lg font-bold text-black tracking-tight mb-5 pb-3 border-b border-gray-200 text-center w-full">Request crypto</h3>
       
       {step === 'success' ? (
         <div className="text-center py-4">
@@ -172,65 +135,76 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h4 className="text-base font-bold mb-0.5">Market Created!</h4>
+          <h4 className="text-base font-bold mb-0.5">Request Posted!</h4>
           <p className="text-xs text-gray-600">Refreshing...</p>
         </div>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-0">
-          {/* Main Text Area - Twitter Style */}
-          <div className="relative pb-8">
-            <textarea
-              ref={textareaRef}
-              value={formData.title}
-              onChange={handleTitleChange}
-              onPaste={handlePaste}
-              className="w-full px-0 py-3 border-0 border-b border-gray-200 bg-transparent placeholder-gray-400 text-base focus:outline-none focus:border-gray-400 transition-colors resize-none overflow-hidden"
-              placeholder="What's your take?"
-              required
-              disabled={loading}
-              rows={4}
-              style={{ minHeight: '100px' }}
-            />
-            {/* Character counter - Circular progress ring */}
-            <div className="absolute bottom-3 right-0 flex items-center gap-2">
-              <span
-                className="inline-block w-5 h-5 rounded-full relative flex-shrink-0"
-                style={{
-                  background: `conic-gradient(${
-                    charCount > 290 ? 'rgb(239, 68, 68)' : 
-                    charCount > 270 ? 'rgb(249, 115, 22)' : 
-                    'rgb(16, 185, 129)'
-                  } ${Math.round((charCount / 300) * 360)}deg, rgb(229, 231, 235) 0deg)`
+        <form onSubmit={handleSubmit} className="space-y-0 w-full">
+          {/* Amount Input - Top */}
+          <div className="relative pb-4 mb-4 w-full">
+            <div className="flex items-baseline gap-2 border-b border-gray-200 pb-3">
+              <input
+                type="number"
+                value={formData.amount}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '' || (!isNaN(parseFloat(value)) && parseFloat(value) >= 0)) {
+                    setFormData({ ...formData, amount: value });
+                  }
                 }}
-                aria-hidden
-              >
-                <span className="absolute inset-[3px] rounded-full bg-white"></span>
-              </span>
-              <span className={`text-xs font-medium ${
-                charCount > 290 ? 'text-red-500' : 
-                charCount > 270 ? 'text-orange-500' : 
-                'text-gray-500'
-              }`}>
-                {300 - charCount}
-              </span>
-            </div>
-          </div>
-
-          {/* Bottom Section - Category, Token, Info, Button */}
-          <div className="pt-3 space-y-3">
-            {/* Category & Token - Inline */}
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1">
+                className="flex-1 min-w-0 px-0 py-2 border-0 bg-transparent placeholder-gray-400 text-2xl font-semibold focus:outline-none focus:border-gray-400 transition-colors text-black [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                placeholder="0.00"
+                step="0.01"
+                min="0.01"
+                required
+                disabled={loading}
+              />
+              {/* Token Selector */}
+              <div className="relative flex-shrink-0">
                 <select
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full appearance-none px-3 py-2 pr-8 rounded-full border border-gray-300 bg-transparent text-sm focus:outline-none focus:border-black transition-colors cursor-pointer"
-                  required
+                  value={formData.tokenSymbol}
+                  onChange={(e) => {
+                    const newToken = availableTokens.find(t => t.symbol === e.target.value);
+                    if (newToken) {
+                      setFormData({ ...formData, tokenSymbol: e.target.value });
+                    }
+                  }}
+                  className="appearance-none px-2.5 py-1.5 pr-6 rounded-full border border-gray-300 bg-transparent text-sm font-semibold focus:outline-none focus:border-black transition-colors cursor-pointer text-gray-700 whitespace-nowrap"
+                  disabled={loading}
+                  style={{ minWidth: 'fit-content' }}
+                >
+                  {availableTokens.map(token => (
+                    <option key={token.symbol} value={token.symbol}>
+                      {token.symbol}
+                    </option>
+                  ))}
+                </select>
+                <svg className="w-3 h-3 text-gray-400 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+                </svg>
+              </div>
+            </div>
+            {/* Chain Selector */}
+            <div className="mt-2 w-full">
+              <div className="relative">
+                <select
+                  value={formData.chainId}
+                  onChange={(e) => {
+                    const newChainId = e.target.value === 'solana' ? 'solana' : parseInt(e.target.value);
+                    const newChainTokens = getTokensForChain(newChainId);
+                    const defaultToken = newChainTokens[0]?.symbol || 'USDC';
+                    setFormData({ 
+                      ...formData, 
+                      chainId: newChainId,
+                      tokenSymbol: newChainTokens.find(t => t.symbol === formData.tokenSymbol)?.symbol || defaultToken
+                    });
+                  }}
+                  className="w-full appearance-none px-3 py-2 pr-8 rounded-full border border-gray-300 bg-transparent text-sm focus:outline-none focus:border-black transition-colors cursor-pointer text-gray-700"
                   disabled={loading}
                 >
-                  {categories.map(cat => (
-                    <option key={cat.value} value={cat.value}>
-                      {cat.label}
+                  {AVAILABLE_CHAINS.map(chain => (
+                    <option key={chain.id} value={chain.id}>
+                      {chain.name}
                     </option>
                   ))}
                 </select>
@@ -238,24 +212,66 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
                 </svg>
               </div>
-              <div className="text-sm text-gray-500 px-2">
-                USDC
-              </div>
+              {/* Gas Fee Display */}
+              <GasFeeDisplay chainId={formData.chainId} tokenSymbol={formData.tokenSymbol} amount={formData.amount} />
             </div>
+          </div>
 
+          {/* Main Text Area - Caption */}
+          <div className="relative pb-8 w-full">
+            <textarea
+              ref={textareaRef}
+              value={formData.caption}
+              onChange={handleCaptionChange}
+              onPaste={handlePaste}
+              className="w-full px-0 py-3 border-0 border-b border-gray-200 bg-transparent placeholder-gray-400 text-base focus:outline-none focus:border-gray-400 transition-colors resize-none overflow-hidden"
+              placeholder="What's this for? (optional)"
+              disabled={loading}
+              rows={4}
+              style={{ minHeight: '100px' }}
+            />
+            {/* Character counter - Circular progress ring */}
+            {formData.caption && (
+              <div className="absolute bottom-3 right-0 flex items-center gap-2">
+                <span
+                  className="inline-block w-5 h-5 rounded-full relative flex-shrink-0"
+                  style={{
+                    background: `conic-gradient(${
+                      charCount > 290 ? 'rgb(239, 68, 68)' : 
+                      charCount > 270 ? 'rgb(249, 115, 22)' : 
+                      'rgb(16, 185, 129)'
+                    } ${Math.round((charCount / 300) * 360)}deg, rgb(229, 231, 235) 0deg)`
+                  }}
+                  aria-hidden
+                >
+                  <span className="absolute inset-[3px] rounded-full bg-white"></span>
+                </span>
+                <span className={`text-xs font-medium ${
+                  charCount > 290 ? 'text-red-500' : 
+                  charCount > 270 ? 'text-orange-500' : 
+                  'text-gray-500'
+                }`}>
+                  {300 - charCount}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Bottom Section - Info, Button */}
+          <div className="pt-3 space-y-3">
             {/* Info - Subtle */}
-            <div className="flex items-center gap-2 text-xs text-gray-500">
-              <svg className="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="flex items-center justify-center gap-2 text-xs text-gray-500 text-center">
+              <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span>24-hour blind voting • Winners split pool</span>
+              <span>Anyone can click Accept to pay directly to your wallet</span>
             </div>
 
-            {/* Submit Button - Twitter Style */}
-            <div className="flex justify-end pt-2">
+            {/* Submit Button */}
+            <div className="flex justify-center pt-2">
               <button
                 type="submit"
-                disabled={loading || charCount < 5}
+                disabled={loading || !formData.amount || parseFloat(formData.amount) < 0.01 || !isConnected}
                 className="px-6 py-2 bg-black text-white rounded-full hover:bg-gray-800 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
               >
                 {step === 'creating' && (
@@ -264,7 +280,7 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                 )}
-                {step === 'creating' ? 'Posting...' : 'Post'}
+                {step === 'creating' ? 'Posting...' : 'Request crypto'}
               </button>
             </div>
           </div>

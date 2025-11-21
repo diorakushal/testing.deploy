@@ -74,17 +74,17 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <Link href="/" className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold bg-gradient-to-r from-[#2952FF] to-[#00D07E] bg-clip-text text-transparent tracking-tight">
-              nusense
+      {/* Header - Enhanced Design */}
+      <header className="bg-white border-b border-gray-100 sticky top-0 backdrop-blur-sm bg-white/95 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 flex justify-between items-center">
+          <Link href="/" className="flex items-center gap-3 group">
+            <h1 className="text-2xl sm:text-3xl font-bold text-black tracking-tight transition-transform duration-200 group-hover:scale-105">
+              numo
             </h1>
           </Link>
           <Link
             href="/"
-            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold bg-gray-100 hover:bg-gray-200 rounded-full transition-all duration-200 active:scale-95"
           >
             Back to Feed
           </Link>
