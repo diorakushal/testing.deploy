@@ -46,7 +46,7 @@ export const CHAINS: Record<number | string, ChainConfig> = {
   },
   56: {
     id: 56,
-    name: 'Binance Smart Chain',
+    name: 'BNB Chain',
     rpcUrl: 'https://bsc-dataseed.binance.org',
     explorer: 'https://bscscan.com',
     nativeCurrency: {
@@ -64,6 +64,61 @@ export const CHAINS: Record<number | string, ChainConfig> = {
       name: 'SOL',
       symbol: 'SOL',
       decimals: 9
+    }
+  },
+  42161: {
+    id: 42161,
+    name: 'Arbitrum',
+    rpcUrl: 'https://arb1.arbitrum.io/rpc',
+    explorer: 'https://arbiscan.io',
+    nativeCurrency: {
+      name: 'Ether',
+      symbol: 'ETH',
+      decimals: 18
+    }
+  },
+  10: {
+    id: 10,
+    name: 'Optimism',
+    rpcUrl: 'https://mainnet.optimism.io',
+    explorer: 'https://optimistic.etherscan.io',
+    nativeCurrency: {
+      name: 'Ether',
+      symbol: 'ETH',
+      decimals: 18
+    }
+  },
+  137: {
+    id: 137,
+    name: 'Polygon',
+    rpcUrl: 'https://polygon-rpc.com',
+    explorer: 'https://polygonscan.com',
+    nativeCurrency: {
+      name: 'MATIC',
+      symbol: 'MATIC',
+      decimals: 18
+    }
+  },
+  43114: {
+    id: 43114,
+    name: 'Avalanche',
+    rpcUrl: 'https://api.avax.network/ext/bc/C/rpc',
+    explorer: 'https://snowtrace.io',
+    nativeCurrency: {
+      name: 'AVAX',
+      symbol: 'AVAX',
+      decimals: 18
+    }
+  },
+  'tron': {
+    id: 'tron' as any,
+    name: 'Tron',
+    rpcUrl: 'https://api.trongrid.io',
+    explorer: 'https://tronscan.org',
+    nativeCurrency: {
+      name: 'TRX',
+      symbol: 'TRX',
+      decimals: 6
     }
   }
 };
@@ -198,7 +253,7 @@ export const TOKENS: TokenConfig[] = [
     decimals: 8,
     chainId: 1
   },
-  // Binance Smart Chain
+  // BNB Chain
   {
     symbol: 'USDC',
     name: 'USD Coin',
@@ -304,6 +359,81 @@ export const TOKENS: TokenConfig[] = [
     address: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm', // Solana WIF
     decimals: 6,
     chainId: 'solana' as any
+  },
+  // Arbitrum
+  {
+    symbol: 'USDC',
+    name: 'USD Coin',
+    address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831',
+    decimals: 6,
+    chainId: 42161
+  },
+  {
+    symbol: 'USDT',
+    name: 'Tether USD',
+    address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
+    decimals: 6,
+    chainId: 42161
+  },
+  // Optimism
+  {
+    symbol: 'USDC',
+    name: 'USD Coin',
+    address: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85',
+    decimals: 6,
+    chainId: 10
+  },
+  {
+    symbol: 'USDT',
+    name: 'Tether USD',
+    address: '0x94b008aA00579c1307B0EF2b499aD98a8ce58e58',
+    decimals: 6,
+    chainId: 10
+  },
+  // Polygon
+  {
+    symbol: 'USDC',
+    name: 'USD Coin',
+    address: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',
+    decimals: 6,
+    chainId: 137
+  },
+  {
+    symbol: 'USDT',
+    name: 'Tether USD',
+    address: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F',
+    decimals: 6,
+    chainId: 137
+  },
+  // Avalanche
+  {
+    symbol: 'USDC',
+    name: 'USD Coin',
+    address: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E',
+    decimals: 6,
+    chainId: 43114
+  },
+  {
+    symbol: 'USDT',
+    name: 'Tether USD',
+    address: '0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7',
+    decimals: 6,
+    chainId: 43114
+  },
+  // Tron (TRC20 tokens)
+  {
+    symbol: 'USDC',
+    name: 'USD Coin',
+    address: 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8', // Tron USDC (TRC20)
+    decimals: 6,
+    chainId: 'tron' as any
+  },
+  {
+    symbol: 'USDT',
+    name: 'Tether USD',
+    address: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', // Tron USDT (TRC20)
+    decimals: 6,
+    chainId: 'tron' as any
   }
 ];
 
@@ -322,11 +452,11 @@ export function getChainConfig(chainId: number | string): ChainConfig | undefine
   return CHAINS[chainId];
 }
 
-// Available chains for selection
+// Available chains for selection - Only these 4 chains are supported
 export const AVAILABLE_CHAINS = [
   { id: 8453, name: 'Base' },
   { id: 1, name: 'Ethereum' },
-  { id: 56, name: 'Binance Smart Chain' },
-  { id: 'solana', name: 'Solana' }
+  { id: 56, name: 'BNB Chain' },
+  { id: 137, name: 'Polygon' }
 ];
 

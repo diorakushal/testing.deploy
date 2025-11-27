@@ -4,7 +4,7 @@ import Toaster from "./Toaster";
 import Providers from "@/components/WagmiProvider";
 
 export const metadata: Metadata = {
-  title: "numo - Crypto Requests",
+  title: "Xelli - Crypto Requests",
   description: "Request and send crypto payments easily",
 };
 

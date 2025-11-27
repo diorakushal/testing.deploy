@@ -5,7 +5,6 @@ import axios from 'axios';
 import { useAccount } from 'wagmi';
 import toast from 'react-hot-toast';
 import { AVAILABLE_CHAINS, getTokensForChain, getToken, getChainConfig, type TokenConfig } from '@/lib/tokenConfig';
-import GasFeeDisplay from './GasFeeDisplay';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -26,8 +25,9 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
   const [charCount, setCharCount] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Get available tokens for selected chain
-  const availableTokens = getTokensForChain(formData.chainId);
+  // Get available tokens for selected chain - filter to only stablecoins (USDC, USDT)
+  const allTokens = getTokensForChain(formData.chainId);
+  const availableTokens = allTokens.filter(token => token.symbol === 'USDC' || token.symbol === 'USDT');
   const selectedToken = getToken(formData.tokenSymbol, formData.chainId);
   const selectedChain = getChainConfig(formData.chainId);
 
@@ -77,12 +77,47 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!isConnected || !address) {
-      toast.error('Please connect your wallet');
-      return;
-    }
-
     if (!validateForm()) return;
+
+    // Check if Solana chain is selected
+    const isSolana = formData.chainId === 'solana' || String(formData.chainId).toLowerCase() === 'solana';
+    
+    let requesterAddress: string;
+    
+    if (isSolana) {
+      // For Solana, need to connect to Phantom wallet
+      if (typeof window.solana === 'undefined') {
+        toast.error('Please install Phantom wallet for Solana payments');
+        return;
+      }
+      
+      try {
+        setLoading(true);
+        toast.loading('Connecting to Phantom wallet...');
+        
+        // Connect to Phantom wallet
+        const response = await window.solana.connect();
+        requesterAddress = response.publicKey.toString();
+        
+        toast.dismiss();
+      } catch (error: any) {
+        toast.dismiss();
+        if (error.code === 4001) {
+          toast.error('Phantom connection rejected');
+        } else {
+          toast.error('Failed to connect Phantom wallet');
+        }
+        setLoading(false);
+        return;
+      }
+    } else {
+      // For EVM chains, use MetaMask address
+      if (!isConnected || !address) {
+        toast.error('Please connect your wallet');
+        return;
+      }
+      requesterAddress = address;
+    }
 
     try {
       setLoading(true);
@@ -94,9 +129,12 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
         return;
       }
 
+      // Use the base amount (gas fees are calculated when user accepts the request)
+      const amountToSubmit = formData.amount;
+
       await axios.post(`${API_URL}/payment-requests`, {
-        requesterAddress: address,
-        amount: formData.amount,
+        requesterAddress: requesterAddress,
+        amount: amountToSubmit,
         tokenSymbol: selectedToken.symbol,
         tokenAddress: selectedToken.address,
         chainId: formData.chainId,
@@ -191,12 +229,13 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
                   value={formData.chainId}
                   onChange={(e) => {
                     const newChainId = e.target.value === 'solana' ? 'solana' : parseInt(e.target.value);
-                    const newChainTokens = getTokensForChain(newChainId);
-                    const defaultToken = newChainTokens[0]?.symbol || 'USDC';
+                    const allChainTokens = getTokensForChain(newChainId);
+                    const stablecoins = allChainTokens.filter(token => token.symbol === 'USDC' || token.symbol === 'USDT');
+                    const defaultToken = stablecoins.find(t => t.symbol === formData.tokenSymbol)?.symbol || stablecoins[0]?.symbol || 'USDC';
                     setFormData({ 
                       ...formData, 
                       chainId: newChainId,
-                      tokenSymbol: newChainTokens.find(t => t.symbol === formData.tokenSymbol)?.symbol || defaultToken
+                      tokenSymbol: defaultToken
                     });
                   }}
                   className="w-full appearance-none px-3 py-2 pr-8 rounded-full border border-gray-300 bg-transparent text-sm focus:outline-none focus:border-black transition-colors cursor-pointer text-gray-700"
@@ -212,8 +251,6 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
                 </svg>
               </div>
-              {/* Gas Fee Display */}
-              <GasFeeDisplay chainId={formData.chainId} tokenSymbol={formData.tokenSymbol} amount={formData.amount} />
             </div>
           </div>
 

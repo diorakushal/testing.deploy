@@ -1,17 +1,10 @@
-import { createConfig, http } from 'wagmi';
-import { base, mainnet, bsc } from 'viem/chains';
-import { injected, metaMask } from 'wagmi/connectors';
+import { getDefaultConfig } from '@rainbow-me/rainbowkit';
+import { base, mainnet, bsc, polygon } from 'wagmi/chains';
 
-export const config = createConfig({
-  chains: [base, mainnet, bsc],
-  connectors: [
-    injected({ target: 'metaMask' }),
-    metaMask(),
-  ],
-  transports: {
-    [base.id]: http(),
-    [mainnet.id]: http(),
-    [bsc.id]: http(),
-  },
+export const config = getDefaultConfig({
+  appName: 'Xelli',
+  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '6e4a1dcc02a0169ec9f4e7ffe7a34810',
+  chains: [base, mainnet, bsc, polygon],
+  ssr: true, // Enable server-side rendering support
 });
 

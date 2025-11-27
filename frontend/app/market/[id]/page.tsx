@@ -5,9 +5,10 @@ import { useParams, useRouter } from 'next/navigation';
 import axios from 'axios';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import WalletConnect from '@/components/WalletConnect';
+import Header from '@/components/Header';
 import MarketCard from '@/components/MarketCard';
 import PostTakeModal from '@/components/PostTakeModal';
+import { supabase } from '@/lib/supabase';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -31,14 +32,36 @@ export default function MarketDetail() {
 
   const [market, setMarket] = useState<Market | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
   const [connectedAddress, setConnectedAddress] = useState<string | undefined>();
   const [showPostTake, setShowPostTake] = useState(false);
   const [postTakeMarket, setPostTakeMarket] = useState<{id: string, title: string, initialSide?: 'agree' | 'disagree', initialAmount?: string, data?: any} | null>(null);
 
+  // Check authentication on mount
   useEffect(() => {
-    fetchMarket();
-  }, [marketId]);
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          // Redirect to login if not authenticated
+          router.push('/login');
+          return;
+        }
+        setAuthLoading(false);
+      } catch (error) {
+        console.error('Error checking auth:', error);
+        router.push('/login');
+      }
+    };
+    checkAuth();
+  }, [router]);
+
+  useEffect(() => {
+    if (!authLoading) {
+      fetchMarket();
+    }
+  }, [marketId, authLoading]);
 
   const fetchMarket = async () => {
     try {
@@ -47,20 +70,15 @@ export default function MarketDetail() {
       setMarket(response.data);
     } catch (error) {
       console.error('Error fetching market:', error);
-      // Use mock data as fallback
-      const { mockMarkets } = await import('@/components/MockData');
-      const mockMarket = mockMarkets.find(m => m.id === marketId);
-      if (mockMarket) {
-        setMarket(mockMarket as any);
-      } else {
-        toast.error('Market not found');
-      }
+      toast.error('Market not found');
+      setMarket(null);
     } finally {
       setLoading(false);
     }
   };
 
-  if (loading) {
+  // Show loading while checking authentication
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
@@ -77,7 +95,7 @@ export default function MarketDetail() {
         <div className="text-center">
           <h1 className="text-2xl font-bold text-black mb-2">Market Not Found</h1>
           <button
-            onClick={() => router.push('/')}
+            onClick={() => router.push('/feed')}
             className="text-[#00D07E] hover:underline"
           >
             Return to home
@@ -89,31 +107,14 @@ export default function MarketDetail() {
 
   return (
     <div className="min-h-screen bg-white h-screen overflow-y-auto">
-      {/* Header - Enhanced Design */}
-      <header className="bg-white z-50 border-b border-gray-100 sticky top-0 backdrop-blur-sm bg-white/95">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-3 sm:py-4">
-            <Link href="/" className="flex items-center gap-2 text-gray-600 hover:text-black transition-colors duration-200 group">
-              <svg className="w-4 h-4 sm:w-5 sm:h-5 transition-transform duration-200 group-hover:-translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              <span className="text-xs sm:text-sm font-semibold hidden sm:inline">Back to Markets</span>
-              <span className="text-xs sm:text-sm font-semibold sm:hidden">Back</span>
-            </Link>
-            <Link href="/" className="absolute left-1/2 transform -translate-x-1/2 flex items-center justify-start group">
-              <h1 className="text-2xl sm:text-3xl font-bold text-black tracking-tight transition-transform duration-200 group-hover:scale-105">numo</h1>
-            </Link>
-            <div className="flex items-center gap-3 sm:gap-4">
-              <WalletConnect 
-                onConnect={(address: string) => {
-                  setIsConnected(true);
-                  setConnectedAddress(address);
-                }} 
-              />
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* Header */}
+      <Header 
+        showSearch={false}
+        onWalletConnect={(address: string) => {
+          setIsConnected(true);
+          setConnectedAddress(address);
+        }}
+      />
 
       {/* Main Content - Single Market Card */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">

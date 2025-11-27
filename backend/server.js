@@ -3,6 +3,8 @@ const cors = require('cors');
 const { Pool } = require('pg');
 const cron = require('node-cron');
 const { ethers } = require('ethers');
+const axios = require('axios');
+const https = require('https');
 require('dotenv').config();
 
 const app = express();
@@ -10,20 +12,45 @@ app.use(cors());
 app.use(express.json());
 
 // PostgreSQL connection (Supabase)
-const pool = new Pool({
-  user: process.env.DB_USER || 'postgres',
-  host: process.env.DB_HOST || 'aws-0-us-east-1.pooler.supabase.com',
-  database: process.env.DB_NAME || 'postgres',
-  password: process.env.DB_PASSWORD || '',
-  port: process.env.DB_PORT || 6543, // Using connection pooler port
-  ssl: {
-    rejectUnauthorized: false // Required for Supabase
-  },
-  // Connection pool settings
-  max: 20, // Maximum number of clients in the pool
-  idleTimeoutMillis: 30000, // How long a client is allowed to remain idle
-  connectionTimeoutMillis: 2000, // How long to wait for a connection
-});
+// Support both connection string and individual parameters
+let poolConfig;
+
+if (process.env.DATABASE_URL || process.env.POSTGRES_URL) {
+  // Use connection string directly (URL encode @ in password if needed)
+  const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+  
+  // Check if using connection pooler - if it fails, try direct connection
+  const isPooler = connectionString.includes('pooler.supabase.com');
+  
+  poolConfig = {
+    connectionString: connectionString,
+    ssl: {
+      rejectUnauthorized: false // Required for Supabase
+    },
+    // Connection pool settings
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: isPooler ? 10000 : 2000, // Longer timeout for pooler
+  };
+} else {
+  // Use individual parameters - try direct connection first (port 5432)
+  poolConfig = {
+    user: process.env.DB_USER || 'postgres',
+    host: process.env.DB_HOST || 'db.robjixmkmrmryrqzivdd.supabase.co',
+    database: process.env.DB_NAME || 'postgres',
+    password: process.env.DB_PASSWORD || 'Kushal@13',
+    port: parseInt(process.env.DB_PORT || '5432'),
+    ssl: {
+      rejectUnauthorized: false // Required for Supabase
+    },
+    // Connection pool settings
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+  };
+}
+
+const pool = new Pool(poolConfig);
 
 // Web3 provider
 const provider = new ethers.JsonRpcProvider(
@@ -682,173 +709,69 @@ app.post('/api/markets/:marketId/distribute-winnings', async (req, res) => {
 
 // ========== PAYMENT REQUESTS API ENDPOINTS ==========
 
-// Seed mock payment requests (development only)
-app.post('/api/payment-requests/seed', async (req, res) => {
-  try {
-    // First, ensure table exists
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS payment_requests (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        requester_address VARCHAR(255) NOT NULL,
-        amount NUMERIC(20, 6) NOT NULL,
-        token_symbol VARCHAR(10) DEFAULT 'USDC',
-        token_address VARCHAR(255) NOT NULL,
-        chain_id VARCHAR(50) NOT NULL,
-        chain_name VARCHAR(50) NOT NULL,
-        caption TEXT,
-        status VARCHAR(20) DEFAULT 'open',
-        paid_by VARCHAR(255),
-        tx_hash VARCHAR(255),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        paid_at TIMESTAMP
-      );
-    `);
-
-    const mockRequests = [
-      {
-        requester_address: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
-        amount: 50,
-        token_symbol: 'USDC',
-        token_address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-        chain_id: '8453',
-        chain_name: 'Base',
-        caption: 'tacos 🌮',
-        status: 'open'
-      },
-      {
-        requester_address: '0x8ba1f109551bD432803012645Hac136c2C1c',
-        amount: 25,
-        token_symbol: 'USDC',
-        token_address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-        chain_id: '8453',
-        chain_name: 'Base',
-        caption: 'Rent share for this month',
-        status: 'open'
-      },
-      {
-        requester_address: '0x5c0d3b8a7d9e1F2f4a6B8d5e4c7a3B9d1E2f4a6',
-        amount: 100,
-        token_symbol: 'USDC',
-        token_address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-        chain_id: '8453',
-        chain_name: 'Base',
-        caption: 'Design commission',
-        status: 'open'
-      },
-      {
-        requester_address: '0x3a7b9c2d4e5f6a8b9c1d2e3f4a5b6c7d8e9f0a1b',
-        amount: 75,
-        token_symbol: 'USDC',
-        token_address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-        chain_id: '8453',
-        chain_name: 'Base',
-        caption: 'Pay me back for drinks',
-        status: 'paid',
-        paid_by: '0x9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0',
-        tx_hash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef'
-      },
-      {
-        requester_address: '0x2b4d6f8a9c1e3d5f7b9a2c4e6f8a1b3d5c7e9f2b',
-        amount: 200,
-        token_symbol: 'USDC',
-        token_address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-        chain_id: '8453',
-        chain_name: 'Base',
-        caption: 'Freelance work completed',
-        status: 'paid',
-        paid_by: '0x1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b',
-        tx_hash: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890'
-      },
-      {
-        requester_address: '0x1f2e3d4c5b6a7980f1e2d3c4b5a6978f0e1d2c3b',
-        amount: 150,
-        token_symbol: 'USDT',
-        token_address: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
-        chain_id: '8453',
-        chain_name: 'Base',
-        caption: 'Music production fee',
-        status: 'open'
-      },
-      {
-        requester_address: '0x9e8d7c6b5a4938271f0e1d2c3b4a5968f7e6d5c4b',
-        amount: 300,
-        token_symbol: 'USDC',
-        token_address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-        chain_id: '1',
-        chain_name: 'Ethereum',
-        caption: 'DAO reimbursement',
-        status: 'open'
-      }
-    ];
-
-    const inserted = [];
-    for (const request of mockRequests) {
-      try {
-        const result = await pool.query(
-          `INSERT INTO payment_requests (
-            requester_address, amount, token_symbol, token_address, 
-            chain_id, chain_name, caption, status, paid_by, tx_hash
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-          RETURNING *`,
-          [
-            request.requester_address,
-            request.amount,
-            request.token_symbol,
-            request.token_address,
-            request.chain_id,
-            request.chain_name,
-            request.caption,
-            request.status,
-            request.paid_by || null,
-            request.tx_hash || null
-          ]
-        );
-        inserted.push(result.rows[0]);
-      } catch (err) {
-        // Skip if already exists
-        if (!err.message.includes('duplicate')) {
-          console.error('Error inserting mock request:', err);
-        }
-      }
-    }
-
-    res.json({ message: `Seeded ${inserted.length} payment requests`, requests: inserted });
-  } catch (error) {
-    console.error('Error seeding payment requests:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+// Seed endpoint removed - no mock data
 
 // Get all payment requests
 app.get('/api/payment-requests', async (req, res) => {
   try {
     const { status, requester_address } = req.query;
     
-    let query = 'SELECT * FROM payment_requests WHERE 1=1';
-    const params = [];
+    // Use Supabase client instead of direct PostgreSQL
+    const { supabase } = require('./lib/supabase');
     
-    // Only filter by status if explicitly provided
+    let query = supabase
+      .from('payment_requests')
+      .select('*')
+      .neq('status', 'cancelled') // Exclude cancelled requests
+      .order('created_at', { ascending: false })
+      .limit(50);
+    
     if (status) {
-      query += ` AND status = $${params.length + 1}`;
-      params.push(status);
+      query = query.eq('status', status);
     }
     
     if (requester_address) {
-      query += ` AND requester_address = $${params.length + 1}`;
-      params.push(requester_address);
+      query = query.eq('requester_address', requester_address);
     }
     
-    query += ' ORDER BY created_at DESC LIMIT 50';
+    const { data, error } = await query;
     
-    const result = await pool.query(query, params);
-    res.json(result.rows);
+    if (error) {
+      // If table doesn't exist, return empty array instead of error
+      if (error.code === '42P01' || error.message?.includes('does not exist')) {
+        console.log('Payment requests table does not exist yet. Run the migration first.');
+        return res.json([]);
+      }
+      throw error;
+    }
+    
+    // Fetch usernames for all unique requester addresses
+    if (data && data.length > 0) {
+      const uniqueAddresses = [...new Set(data.map(r => r.requester_address))];
+      
+      // Fetch usernames from users table
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('wallet_address, username')
+        .in('wallet_address', uniqueAddresses);
+      
+      if (!usersError && users) {
+        // Create a map of address -> username
+        const usernameMap = {};
+        users.forEach(user => {
+          usernameMap[user.wallet_address?.toLowerCase()] = user.username;
+        });
+        
+        // Add username to each payment request
+        data.forEach(request => {
+          request.requester_username = usernameMap[request.requester_address?.toLowerCase()] || null;
+        });
+      }
+    }
+    
+    res.json(data || []);
   } catch (error) {
     console.error('Error fetching payment requests:', error);
-    // If table doesn't exist, return empty array instead of error
-    if (error.message && error.message.includes('does not exist')) {
-      console.log('Payment requests table does not exist yet. Run the migration first.');
-      return res.json([]);
-    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -856,26 +779,45 @@ app.get('/api/payment-requests', async (req, res) => {
 // Get single payment request
 app.get('/api/payment-requests/:id', async (req, res) => {
   try {
-    const requestId = req.params.id;
+    // Use Supabase client instead of direct PostgreSQL
+    const { supabase } = require('./lib/supabase');
     
-    // Try to query by ID (handles both UUID and string IDs)
-    let result;
-    try {
-      result = await pool.query(
-        'SELECT * FROM payment_requests WHERE id = $1',
-        [requestId]
-      );
-    } catch (dbError) {
-      // If table doesn't exist or query fails, return 404
-      console.error('Database error:', dbError);
-      return res.status(404).json({ error: 'Payment request not found' });
+    const { data, error } = await supabase
+      .from('payment_requests')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Payment request not found' });
+      }
+      throw error;
     }
     
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Payment request not found' });
+    // Fetch username for requester
+    if (data && data.requester_address) {
+      const { data: user, error: userError } = await supabase
+        .from('users')
+        .select('username')
+        .eq('wallet_address', data.requester_address)
+        .maybeSingle();
+      
+      if (!userError && user) {
+        data.requester_username = user.username;
+      } else {
+        data.requester_username = null;
+      }
     }
     
-    res.json(result.rows[0]);
+    res.json(data);
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Payment request not found' });
+      }
+      throw error;
+    }
+    
+    res.json(data);
   } catch (error) {
     console.error('Error fetching payment request:', error);
     res.status(500).json({ error: error.message });
@@ -904,24 +846,30 @@ app.post('/api/payment-requests', async (req, res) => {
       return res.status(400).json({ error: 'Amount must be greater than 0' });
     }
     
-    const result = await pool.query(
-      `INSERT INTO payment_requests (
-        requester_address, amount, token_symbol, token_address, 
-        chain_id, chain_name, caption, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'open')
-      RETURNING *`,
-      [
-        requesterAddress,
-        amount,
-        tokenSymbol,
-        tokenAddress,
-        chainId,
-        chainName,
-        caption || null
-      ]
-    );
+    // Use Supabase client instead of direct PostgreSQL for better reliability
+    const { supabase } = require('./lib/supabase');
     
-    res.json(result.rows[0]);
+    const { data, error } = await supabase
+      .from('payment_requests')
+      .insert({
+        requester_address: requesterAddress,
+        amount: parseFloat(amount),
+        token_symbol: tokenSymbol,
+        token_address: tokenAddress,
+        chain_id: chainId.toString(),
+        chain_name: chainName,
+        caption: caption || null,
+        status: 'open'
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Error creating payment request:', error);
+      throw error;
+    }
+    
+    res.json(data);
   } catch (error) {
     console.error('Error creating payment request:', error);
     res.status(500).json({ error: error.message });
@@ -956,7 +904,51 @@ app.patch('/api/payment-requests/:id/paid', async (req, res) => {
   }
 });
 
-// Cancel payment request
+// Delete payment request (cancel)
+app.delete('/api/payment-requests/:id', async (req, res) => {
+  try {
+    const { requesterAddress } = req.body;
+    
+    if (!requesterAddress) {
+      return res.status(400).json({ error: 'Missing requesterAddress' });
+    }
+    
+    // Use Supabase client instead of direct PostgreSQL
+    const { supabase } = require('./lib/supabase');
+    
+    // First, verify the request exists and belongs to the requester
+    const { data: existingRequest, error: fetchError } = await supabase
+      .from('payment_requests')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('requester_address', requesterAddress)
+      .eq('status', 'open')
+      .single();
+    
+    if (fetchError || !existingRequest) {
+      return res.status(404).json({ error: 'Payment request not found or cannot be deleted' });
+    }
+    
+    // Delete the request completely
+    const { error } = await supabase
+      .from('payment_requests')
+      .delete()
+      .eq('id', req.params.id)
+      .eq('requester_address', requesterAddress)
+      .eq('status', 'open');
+    
+    if (error) {
+      throw error;
+    }
+    
+    res.json({ message: 'Payment request deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting payment request:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Cancel endpoint (kept for backward compatibility, but now deletes)
 app.patch('/api/payment-requests/:id/cancel', async (req, res) => {
   try {
     const { requesterAddress } = req.body;
@@ -965,22 +957,278 @@ app.patch('/api/payment-requests/:id/cancel', async (req, res) => {
       return res.status(400).json({ error: 'Missing requesterAddress' });
     }
     
-    const result = await pool.query(
-      `UPDATE payment_requests 
-       SET status = 'cancelled'
-       WHERE id = $1 AND requester_address = $2 AND status = 'open'
-       RETURNING *`,
-      [req.params.id, requesterAddress]
-    );
+    // Use Supabase client instead of direct PostgreSQL
+    const { supabase } = require('./lib/supabase');
     
-    if (result.rows.length === 0) {
+    // First, verify the request exists and belongs to the requester
+    const { data: existingRequest, error: fetchError } = await supabase
+      .from('payment_requests')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('requester_address', requesterAddress)
+      .eq('status', 'open')
+      .single();
+    
+    if (fetchError || !existingRequest) {
       return res.status(404).json({ error: 'Payment request not found or cannot be cancelled' });
     }
     
-    res.json(result.rows[0]);
+    // Delete the request completely instead of marking as cancelled
+    const { error } = await supabase
+      .from('payment_requests')
+      .delete()
+      .eq('id', req.params.id)
+      .eq('requester_address', requesterAddress)
+      .eq('status', 'open');
+    
+    if (error) {
+      throw error;
+    }
+    
+    res.json({ message: 'Payment request deleted successfully' });
   } catch (error) {
-    console.error('Error cancelling payment request:', error);
+    console.error('Error deleting payment request:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Proxy endpoint for CoinGecko API to avoid CORS issues
+app.get('/api/crypto-price', async (req, res) => {
+  try {
+    const { ids } = req.query;
+    
+    if (!ids) {
+      return res.status(400).json({ error: 'Missing ids parameter' });
+    }
+    
+    // Create HTTPS agent with proper SSL handling
+    const httpsAgent = new https.Agent({
+      rejectUnauthorized: false, // Allow self-signed certificates (for development)
+      // On macOS, sometimes the certificate chain isn't properly configured
+      // This allows the connection while still using HTTPS
+    });
+    
+    // Retry logic: try up to 3 times with exponential backoff
+    let lastError;
+    const maxRetries = 3;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
+          params: {
+            ids: ids,
+            vs_currencies: 'usd'
+          },
+          timeout: 20000, // 20 second timeout
+          httpsAgent: httpsAgent,
+          // Add headers to help with rate limiting
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (compatible; CryptoApp/1.0)'
+          }
+        });
+        
+        // Success - return the data
+        return res.json(response.data);
+      } catch (attemptError) {
+        lastError = attemptError;
+        
+        // If it's a rate limit error (429), wait longer
+        if (attemptError.response?.status === 429) {
+          const retryAfter = attemptError.response.headers['retry-after'] || (attempt * 2);
+          console.log(`Rate limited. Waiting ${retryAfter} seconds before retry ${attempt}/${maxRetries}...`);
+          await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+          continue;
+        }
+        
+        // If it's a 403 (blocked/forbidden), try fallback price APIs
+        if (attemptError.response?.status === 403) {
+          console.log('CoinGecko API blocked (403). Trying fallback price APIs...');
+          
+          // Fallback 1: Try Binance API (no API key required for public endpoints)
+          try {
+            const binanceSymbols = {
+              'usd-coin': 'USDCUSDT',
+              'tether': 'USDTUSDT',
+              'ethereum': 'ETHUSDT',
+              'bitcoin': 'BTCUSDT',
+              'solana': 'SOLUSDT',
+              'binancecoin': 'BNBUSDT',
+              'matic-network': 'MATICUSDT',
+              'avalanche-2': 'AVAXUSDT',
+              'dai': 'DAIUSDT',
+              'weth': 'ETHUSDT',
+              'wrapped-bitcoin': 'BTCUSDT'
+            };
+            
+            // Try to map CoinGecko IDs to Binance symbols
+            const idArray = Array.isArray(ids) ? ids : ids.split(',');
+            const binancePrices = {};
+            
+            for (const id of idArray) {
+              const symbol = binanceSymbols[id.trim()];
+              if (symbol) {
+                try {
+                  const binanceResponse = await axios.get(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`, {
+                    timeout: 10000,
+                    httpsAgent: httpsAgent
+                  });
+                  
+                  if (binanceResponse.data && binanceResponse.data.price) {
+                    // Binance returns price in USDT, convert to USD (usually 1:1)
+                    binancePrices[id.trim()] = {
+                      usd: parseFloat(binanceResponse.data.price)
+                    };
+                  }
+                } catch (binErr) {
+                  console.log(`Binance fallback failed for ${id}:`, binErr.message);
+                }
+              }
+            }
+            
+            // If we got at least one price from Binance, return it
+            if (Object.keys(binancePrices).length > 0) {
+              console.log(`✅ Using Binance fallback for ${Object.keys(binancePrices).length} token(s)`);
+              return res.json(binancePrices);
+            }
+          } catch (binanceError) {
+            console.log('Binance fallback failed:', binanceError.message);
+          }
+          
+          // If all fallbacks fail, try using cached/default prices as last resort
+          console.log('All APIs blocked. Using default/cached prices as fallback...');
+          const defaultPrices = {
+            'usd-coin': { usd: 1.0 },
+            'usdc': { usd: 1.0 },
+            'tether': { usd: 1.0 },
+            'usdt': { usd: 1.0 },
+            'ethereum': { usd: 3000.0 },
+            'eth': { usd: 3000.0 },
+            'bitcoin': { usd: 45000.0 },
+            'btc': { usd: 45000.0 },
+            'solana': { usd: 100.0 },
+            'sol': { usd: 100.0 },
+            'binancecoin': { usd: 300.0 },
+            'bnb': { usd: 300.0 },
+            'matic-network': { usd: 0.8 },
+            'matic': { usd: 0.8 },
+            'avalanche-2': { usd: 35.0 },
+            'avax': { usd: 35.0 },
+            'dai': { usd: 1.0 },
+            'weth': { usd: 3000.0 },
+            'wrapped-bitcoin': { usd: 45000.0 }
+          };
+          
+          const idArray = Array.isArray(ids) ? ids : ids.split(',');
+          const fallbackPrices = {};
+          let foundAny = false;
+          
+          for (const id of idArray) {
+            const cleanId = id.trim().toLowerCase();
+            if (defaultPrices[cleanId]) {
+              fallbackPrices[cleanId] = defaultPrices[cleanId];
+              foundAny = true;
+            }
+          }
+          
+          if (foundAny) {
+            console.log(`⚠️ Using default prices for ${Object.keys(fallbackPrices).length} token(s) - prices may be outdated`);
+            return res.json({
+              ...fallbackPrices,
+              _warning: 'Using default prices - network blocked price APIs. Prices may be outdated.',
+              _timestamp: new Date().toISOString()
+            });
+          }
+          
+          // If no default prices available, return error
+          return res.status(503).json({
+            error: 'Price APIs unavailable',
+            details: 'CoinGecko and fallback APIs are blocked by your network. Default prices not available for requested tokens.',
+            message: 'Unable to fetch prices. Your network appears to be blocking crypto price APIs.',
+            suggestion: 'Try: 1) Disable VPN if using one, 2) Use a different network, 3) Contact your network administrator if on a corporate network.',
+            tokens_requested: idArray
+          });
+        }
+        
+        // If it's a network/timeout error and we have retries left, wait and retry
+        if ((attemptError.code === 'ECONNRESET' || 
+             attemptError.code === 'ETIMEDOUT' || 
+             attemptError.code === 'ENOTFOUND' ||
+             attemptError.code === 'ECONNREFUSED' ||
+             attemptError.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' ||
+             attemptError.code === 'CERT_HAS_EXPIRED' ||
+             attemptError.message?.includes('certificate') ||
+             !attemptError.response) && attempt < maxRetries) {
+          const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Exponential backoff, max 5s
+          console.log(`Network/SSL error (${attemptError.code || attemptError.message || 'unknown'}). Retrying in ${waitTime}ms (attempt ${attempt}/${maxRetries})...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+        
+        // If it's the last attempt or a non-retryable error, throw
+        throw attemptError;
+      }
+    }
+    
+    // If we get here, all retries failed
+    throw lastError;
+    
+  } catch (error) {
+    console.error('Error fetching crypto price after retries:', error.message);
+    console.error('Error details:', {
+      code: error.code,
+      status: error.response?.status,
+      message: error.message
+    });
+    
+    if (error.response) {
+      // API returned an error response
+      const status = error.response.status;
+      let message = 'API returned an error';
+      let suggestion = '';
+      
+      if (status === 403) {
+        message = 'CoinGecko API is blocked by your network or firewall';
+        suggestion = 'This may be due to DNS filtering, corporate firewall, or geographic restrictions. Try using a different network or VPN.';
+      } else if (status === 429) {
+        message = 'Rate limit exceeded. Please try again in a moment.';
+      } else if (status === 404) {
+        message = 'Token not found. Please check the token ID.';
+      }
+      
+      res.status(status).json({ 
+        error: 'CoinGecko API error', 
+        details: typeof error.response.data === 'string' ? error.response.data.substring(0, 200) : error.response.data,
+        message: message,
+        suggestion: suggestion
+      });
+    } else if (error.request || error.code || error.message?.includes('certificate')) {
+      // Network error, SSL error, or connection issue
+      const isSSLError = error.code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' || 
+                         error.code === 'CERT_HAS_EXPIRED' ||
+                         error.message?.includes('certificate') ||
+                         error.message?.includes('SSL');
+      
+      res.status(503).json({ 
+        error: 'CoinGecko API unavailable', 
+        details: isSSLError 
+          ? `SSL certificate error: ${error.message || error.code}`
+          : `Network error: ${error.code || error.message || 'Connection failed'}`,
+        message: isSSLError
+          ? 'SSL certificate verification failed. This may be due to network configuration issues.'
+          : 'Unable to reach CoinGecko API. Please check your internet connection and try again.',
+        suggestion: isSSLError
+          ? 'If you are on a corporate network, contact your IT department. Otherwise, try using a different network.'
+          : 'Check your internet connection and firewall settings.'
+      });
+    } else {
+      // Other error
+      res.status(500).json({ 
+        error: 'Failed to fetch crypto price', 
+        details: error.message,
+        message: 'An unexpected error occurred while fetching prices.'
+      });
+    }
   }
 });
 

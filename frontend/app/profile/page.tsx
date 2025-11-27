@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import Link from 'next/link';
+import Header from '@/components/Header';
+import { supabase } from '@/lib/supabase';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -24,17 +26,41 @@ export default function ProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authLoading, setAuthLoading] = useState(true);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
 
+  // Check authentication on mount
   useEffect(() => {
-    // This would typically get wallet from connected wallet state
-    // For now, we'll use URL params or localStorage
-    const address = localStorage.getItem('walletAddress');
-    if (address) {
-      setWalletAddress(address);
-      fetchUser(address);
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          // Redirect to login if not authenticated
+          router.push('/login');
+          return;
+        }
+        setAuthLoading(false);
+      } catch (error) {
+        console.error('Error checking auth:', error);
+        router.push('/login');
+      }
+    };
+    checkAuth();
+  }, [router]);
+
+  useEffect(() => {
+    if (!authLoading) {
+      // This would typically get wallet from connected wallet state
+      // For now, we'll use URL params or localStorage
+      const address = localStorage.getItem('walletAddress');
+      if (address) {
+        setWalletAddress(address);
+        fetchUser(address);
+      } else {
+        setLoading(false);
+      }
     }
-  }, []);
+  }, [authLoading]);
 
   const fetchUser = async (address: string) => {
     try {
@@ -51,10 +77,14 @@ export default function ProfilePage() {
     return `${address.slice(0, 8)}...${address.slice(-6)}`;
   };
 
-  if (loading) {
+  // Show loading while checking authentication
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Loading...</div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
       </div>
     );
   }
@@ -64,7 +94,7 @@ export default function ProfilePage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="text-2xl font-bold mb-4">No profile found</div>
-          <Link href="/" className="text-blue-600 hover:underline">
+          <Link href="/feed" className="text-blue-600 hover:underline">
             Go to Homepage
           </Link>
         </div>
@@ -74,22 +104,8 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header - Enhanced Design */}
-      <header className="bg-white border-b border-gray-100 sticky top-0 backdrop-blur-sm bg-white/95 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4 flex justify-between items-center">
-          <Link href="/" className="flex items-center gap-3 group">
-            <h1 className="text-2xl sm:text-3xl font-bold text-black tracking-tight transition-transform duration-200 group-hover:scale-105">
-              numo
-            </h1>
-          </Link>
-          <Link
-            href="/"
-            className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-semibold bg-gray-100 hover:bg-gray-200 rounded-full transition-all duration-200 active:scale-95"
-          >
-            Back to Feed
-          </Link>
-        </div>
-      </header>
+      {/* Header */}
+      <Header showSearch={false} />
 
       {/* Main Content */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
