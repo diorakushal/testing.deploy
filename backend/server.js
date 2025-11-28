@@ -779,21 +779,37 @@ app.get('/api/payment-requests', async (req, res) => {
 // Get single payment request
 app.get('/api/payment-requests/:id', async (req, res) => {
   try {
+    const requestId = req.params.id;
+    console.log('[PaymentRequestAPI] 📥 Fetching payment request', { requestId });
+    
     // Use Supabase client instead of direct PostgreSQL
     const { supabase } = require('./lib/supabase');
     
     const { data, error } = await supabase
       .from('payment_requests')
       .select('*')
-      .eq('id', req.params.id)
+      .eq('id', requestId)
       .single();
     
     if (error) {
+      console.error('[PaymentRequestAPI] ❌ Error fetching payment request', {
+        requestId,
+        error: error.message,
+        code: error.code
+      });
+      
       if (error.code === 'PGRST116') {
         return res.status(404).json({ error: 'Payment request not found' });
       }
       throw error;
     }
+    
+    console.log('[PaymentRequestAPI] ✅ Payment request fetched', {
+      requestId,
+      status: data?.status,
+      txHash: data?.tx_hash,
+      paidBy: data?.paid_by
+    });
     
     // Fetch username for requester
     if (data && data.requester_address) {
@@ -811,15 +827,12 @@ app.get('/api/payment-requests/:id', async (req, res) => {
     }
     
     res.json(data);
-      if (error.code === 'PGRST116') {
-        return res.status(404).json({ error: 'Payment request not found' });
-      }
-      throw error;
-    }
-    
-    res.json(data);
   } catch (error) {
-    console.error('Error fetching payment request:', error);
+    console.error('[PaymentRequestAPI] ❌ Unexpected error fetching payment request', {
+      requestId: req.params.id,
+      error: error.message,
+      stack: error.stack
+    });
     res.status(500).json({ error: error.message });
   }
 });
@@ -880,27 +893,219 @@ app.post('/api/payment-requests', async (req, res) => {
 app.patch('/api/payment-requests/:id/paid', async (req, res) => {
   try {
     const { txHash, paidBy } = req.body;
+    const requestId = req.params.id;
+    
+    console.log('[PaymentRequestAPI] 📝 Updating payment request status', {
+      requestId,
+      txHash,
+      paidBy,
+      hasTxHash: !!txHash,
+      hasPaidBy: !!paidBy
+    });
     
     if (!txHash || !paidBy) {
+      console.error('[PaymentRequestAPI] ❌ Missing required fields', { txHash: !!txHash, paidBy: !!paidBy });
       return res.status(400).json({ error: 'Missing txHash or paidBy' });
     }
     
-    const result = await pool.query(
-      `UPDATE payment_requests 
-       SET status = 'paid', paid_by = $1, tx_hash = $2, paid_at = CURRENT_TIMESTAMP
-       WHERE id = $3 AND status = 'open'
-       RETURNING *`,
-      [paidBy, txHash, req.params.id]
-    );
+    // Use Supabase client for consistency and better error handling
+    const { supabase } = require('./lib/supabase');
     
-    if (result.rows.length === 0) {
+    // First, check if the request exists and is open
+    const { data: existingRequest, error: fetchError } = await supabase
+      .from('payment_requests')
+      .select('*')
+      .eq('id', requestId)
+      .eq('status', 'open')
+      .single();
+    
+    if (fetchError || !existingRequest) {
+      console.error('[PaymentRequestAPI] ❌ Request not found or already paid', {
+        requestId,
+        error: fetchError?.message,
+        exists: !!existingRequest
+      });
       return res.status(404).json({ error: 'Payment request not found or already paid' });
     }
     
-    res.json(result.rows[0]);
+    console.log('[PaymentRequestAPI] ✅ Request found, updating status', {
+      requestId,
+      currentStatus: existingRequest.status
+    });
+    
+    // Update the payment request
+    // Use explicit timestamp to ensure consistency
+    const paidAtTimestamp = new Date().toISOString();
+    const updateData = {
+      status: 'paid',
+      paid_by: paidBy,
+      tx_hash: txHash,
+      paid_at: paidAtTimestamp
+    };
+    
+    console.log('[PaymentRequestAPI] 🔄 Attempting database update', {
+      requestId,
+      updateData,
+      timestamp: paidAtTimestamp
+    });
+    
+    // First, try to update with status check (prevents race conditions)
+    let { data: updatedRequest, error: updateError } = await supabase
+      .from('payment_requests')
+      .update(updateData)
+      .eq('id', requestId)
+      .eq('status', 'open') // Only update if still open (prevent race conditions)
+      .select()
+      .single();
+    
+    if (updateError) {
+      console.error('[PaymentRequestAPI] ❌ Error updating payment request', {
+        requestId,
+        error: updateError.message,
+        code: updateError.code,
+        details: updateError.details,
+        hint: updateError.hint
+      });
+      throw updateError;
+    }
+    
+    if (!updatedRequest) {
+      console.error('[PaymentRequestAPI] ❌ Update returned no rows', { 
+        requestId,
+        possibleReasons: [
+          'Request ID not found',
+          'Status is already "paid" (race condition)',
+          'Status was changed by another process'
+        ]
+      });
+      
+      // Try to fetch the current state to see what happened
+      const { data: currentRequest } = await supabase
+        .from('payment_requests')
+        .select('status, tx_hash, paid_by')
+        .eq('id', requestId)
+        .single();
+      
+      console.log('[PaymentRequestAPI] 📊 Current request state', {
+        requestId,
+        currentStatus: currentRequest?.status,
+        currentTxHash: currentRequest?.tx_hash,
+        currentPaidBy: currentRequest?.paid_by
+      });
+      
+      // If it's already paid, that's actually okay - return success
+      if (currentRequest?.status === 'paid') {
+        console.log('[PaymentRequestAPI] ✅ Request already marked as paid (concurrent update)', { 
+          requestId,
+          existingTxHash: currentRequest.tx_hash,
+          newTxHash: txHash,
+          matches: currentRequest.tx_hash === txHash
+        });
+        return res.json(currentRequest);
+      }
+      
+      // If status is still 'open' but update failed, try updating without the status check
+      // This handles edge cases where the status check might be too strict
+      if (currentRequest?.status === 'open') {
+        console.log('[PaymentRequestAPI] 🔄 Retrying update without status check', { requestId });
+        const { data: retryUpdate, error: retryError } = await supabase
+          .from('payment_requests')
+          .update(updateData)
+          .eq('id', requestId)
+          .select()
+          .single();
+        
+        if (!retryError && retryUpdate) {
+          console.log('[PaymentRequestAPI] ✅ Retry update successful', {
+            requestId,
+            newStatus: retryUpdate.status
+          });
+          
+          // Verify the update persisted
+          const { data: verifyRetry } = await supabase
+            .from('payment_requests')
+            .select('status, tx_hash, paid_by, paid_at')
+            .eq('id', requestId)
+            .single();
+          
+          if (verifyRetry?.status === 'paid') {
+            console.log('[PaymentRequestAPI] ✅ Retry update verified in database', {
+              requestId,
+              verifiedStatus: verifyRetry.status
+            });
+            return res.json(retryUpdate);
+          } else {
+            console.error('[PaymentRequestAPI] ❌ Retry update did not persist', {
+              requestId,
+              expectedStatus: 'paid',
+              actualStatus: verifyRetry?.status
+            });
+          }
+        } else {
+          console.error('[PaymentRequestAPI] ❌ Retry update failed', {
+            requestId,
+            error: retryError?.message
+          });
+        }
+      }
+      
+      // Last resort: Check if this transaction hash already exists (idempotency check)
+      if (txHash) {
+        const { data: existingPaidRequest } = await supabase
+          .from('payment_requests')
+          .select('*')
+          .eq('tx_hash', txHash)
+          .single();
+        
+        if (existingPaidRequest && existingPaidRequest.id === requestId) {
+          console.log('[PaymentRequestAPI] ✅ Transaction already recorded (idempotency)', {
+            requestId,
+            txHash,
+            existingStatus: existingPaidRequest.status
+          });
+          return res.json(existingPaidRequest);
+        }
+      }
+      
+      return res.status(404).json({ error: 'Payment request not found or already paid' });
+    }
+    
+    console.log('[PaymentRequestAPI] ✅ Payment request updated successfully', {
+      requestId,
+      newStatus: updatedRequest.status,
+      txHash: updatedRequest.tx_hash,
+      paidBy: updatedRequest.paid_by,
+      paidAt: updatedRequest.paid_at
+    });
+    
+    // Verify the update persisted by fetching it again
+    const { data: verifyRequest, error: verifyError } = await supabase
+      .from('payment_requests')
+      .select('status, tx_hash, paid_by')
+      .eq('id', requestId)
+      .single();
+    
+    if (verifyError) {
+      console.error('[PaymentRequestAPI] ⚠️ Verification fetch failed', {
+        requestId,
+        error: verifyError.message
+      });
+    } else {
+      console.log('[PaymentRequestAPI] ✅ Verification - status persisted', {
+        requestId,
+        verifiedStatus: verifyRequest.status,
+        verifiedTxHash: verifyRequest.tx_hash
+      });
+    }
+    
+    res.json(updatedRequest);
   } catch (error) {
-    console.error('Error updating payment request:', error);
-    res.status(500).json({ error: error.message });
+    console.error('[PaymentRequestAPI] ❌ Unexpected error updating payment request', {
+      error: error.message,
+      stack: error.stack,
+      requestId: req.params.id
+    });
+    res.status(500).json({ error: error.message || 'Failed to update payment request status' });
   }
 });
 

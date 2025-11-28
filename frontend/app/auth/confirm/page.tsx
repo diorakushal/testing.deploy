@@ -67,7 +67,7 @@ export default function ConfirmEmailPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Header showSearch={false} />
+      <Header />
       
       <main className="flex items-center justify-center px-4 py-12 sm:py-16">
         <div className="w-full max-w-md">

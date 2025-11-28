@@ -92,3 +92,270 @@ html {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   }
 }
+
+/* RainbowKit Customization to match site design */
+:root {
+  --rk-radii-connectButton: 0.5rem;
+  --rk-radii-actionButton: 0.5rem;
+  --rk-radii-modal: 0.75rem;
+}
+
+/* RainbowKit Wrapper */
+.rainbowkit-wrapper {
+  display: inline-flex;
+}
+
+/* Connect Button Styling */
+[data-rk] button[data-testid="rk-connect-button"] {
+  border-radius: 0.5rem !important;
+  border: 1px solid #e5e7eb !important;
+  background: #ffffff !important;
+  color: #000000 !important;
+  font-weight: 500 !important;
+  font-size: 0.875rem !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-rk] button[data-testid="rk-connect-button"]:hover {
+  background: #f9fafb !important;
+  border-color: #d1d5db !important;
+}
+
+/* Network Selector Button */
+[data-rk] button[aria-label*="Chain"] {
+  border-radius: 0.5rem !important;
+  border: 1px solid #e5e7eb !important;
+  background: #ffffff !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-rk] button[aria-label*="Chain"]:hover {
+  background: #f9fafb !important;
+}
+
+/* Modal Styling */
+[data-rk] [role="dialog"] {
+  border-radius: 0.75rem !important;
+  border: 1px solid #e5e7eb !important;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Network List Items */
+[data-rk] [role="dialog"] button[role="menuitem"],
+[data-rk] [role="dialog"] div[role="button"] {
+  border-radius: 0.5rem !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-rk] [role="dialog"] button[role="menuitem"]:hover,
+[data-rk] [role="dialog"] div[role="button"]:hover {
+  background: #f9fafb !important;
+}
+
+/* Selected Network */
+[data-rk] [role="dialog"] button[aria-selected="true"],
+[data-rk] [role="dialog"] div[data-selected="true"] {
+  background: #f3f4f6 !important;
+  border: 1px solid #e5e7eb !important;
+}
+
+/* Close Button */
+[data-rk] button[aria-label="Close"] {
+  border-radius: 0.5rem !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-rk] button[aria-label="Close"]:hover {
+  background: #f9fafb !important;
+}
+
+/* Account Button */
+[data-rk] button[data-testid="rk-account-button"] {
+  border-radius: 0.5rem !important;
+  border: 1px solid #e5e7eb !important;
+  background: #ffffff !important;
+  transition: all 0.2s ease !important;
+}
+
+[data-rk] button[data-testid="rk-account-button"]:hover {
+  background: #f9fafb !important;
+}
+
+/* Text Colors */
+[data-rk] {
+  color: #000000 !important;
+}
+
+[data-rk] [role="dialog"] {
+  color: #000000 !important;
+}
+
+/* Chain Icon Container */
+[data-rk] [class*="rk-chain-icon"] {
+  border-radius: 0.5rem !important;
+}
+
+/* Ensure consistent spacing and typography */
+[data-rk] button,
+[data-rk] [role="button"] {
+  font-family: system-ui, -apple-system, sans-serif !important;
+  font-size: 0.875rem !important;
+}
+
+/* Network name text */
+[data-rk] span[class*="rk-chain-name"] {
+  font-weight: 500 !important;
+  color: #000000 !important;
+}
+
+/* Connected indicator */
+[data-rk] [class*="rk-connected"] {
+  color: #10b981 !important;
+  font-size: 0.75rem !important;
+}
+
+/* Account Modal - Enhanced UX/UI */
+[data-rk] [role="dialog"] {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Account Modal Content Container */
+[data-rk] [role="dialog"] > div {
+  padding: 1.5rem !important;
+}
+
+/* Wallet Avatar/Icon Area */
+[data-rk] [role="dialog"] [class*="rk-account"] [class*="avatar"],
+[data-rk] [role="dialog"] [class*="rk-account"] [class*="icon"],
+[data-rk] [role="dialog"] [class*="rk-account"] > div:first-child {
+  margin-bottom: 1rem !important;
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+
+[data-rk] [role="dialog"] [class*="rk-account"] [class*="avatar"] > div,
+[data-rk] [role="dialog"] [class*="rk-account"] [class*="icon"] > div {
+  width: 3.5rem !important;
+  height: 3.5rem !important;
+  border-radius: 50% !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Wallet Address Display */
+[data-rk] [role="dialog"] [class*="rk-account"] [class*="address"],
+[data-rk] [role="dialog"] [class*="rk-account"] [class*="text"] {
+  font-size: 1rem !important;
+  font-weight: 600 !important;
+  color: #000000 !important;
+  letter-spacing: -0.01em !important;
+  margin-bottom: 0.25rem !important;
+  text-align: center !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+}
+
+/* Balance Display */
+[data-rk] [role="dialog"] [class*="rk-account"] [class*="balance"],
+[data-rk] [role="dialog"] [class*="rk-account"] [class*="secondary"] {
+  font-size: 0.875rem !important;
+  color: #6b7280 !important;
+  font-weight: 400 !important;
+  text-align: center !important;
+  margin-bottom: 1.5rem !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+}
+
+/* Action Buttons Container */
+[data-rk] [role="dialog"] [class*="rk-account"] [class*="actions"],
+[data-rk] [role="dialog"] [class*="rk-account"] [class*="buttons"],
+[data-rk] [role="dialog"] [class*="rk-account"] > div:last-child {
+  display: flex !important;
+  gap: 0.75rem !important;
+  margin-top: 1.5rem !important;
+}
+
+/* Individual Action Buttons */
+[data-rk] [role="dialog"] [class*="rk-account"] button,
+[data-rk] [role="dialog"] [class*="rk-account"] [role="button"] {
+  flex: 1 !important;
+  padding: 0.75rem 1rem !important;
+  border-radius: 0.5rem !important;
+  border: 1px solid #e5e7eb !important;
+  background: #ffffff !important;
+  color: #000000 !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.5rem !important;
+  font-family: system-ui, -apple-system, sans-serif !important;
+  cursor: pointer !important;
+}
+
+[data-rk] [role="dialog"] [class*="rk-account"] button:hover,
+[data-rk] [role="dialog"] [class*="rk-account"] [role="button"]:hover {
+  background: #f9fafb !important;
+  border-color: #d1d5db !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+}
+
+[data-rk] [role="dialog"] [class*="rk-account"] button:active,
+[data-rk] [role="dialog"] [class*="rk-account"] [role="button"]:active {
+  transform: translateY(0) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Disconnect Button - More prominent styling */
+[data-rk] [role="dialog"] [class*="rk-account"] button[aria-label*="Disconnect"],
+[data-rk] [role="dialog"] [class*="rk-account"] button:has(svg[class*="disconnect"]),
+[data-rk] [role="dialog"] [class*="rk-account"] button:last-child {
+  border-color: #f3f4f6 !important;
+}
+
+[data-rk] [role="dialog"] [class*="rk-account"] button[aria-label*="Disconnect"]:hover,
+[data-rk] [role="dialog"] [class*="rk-account"] button:has(svg[class*="disconnect"]):hover,
+[data-rk] [role="dialog"] [class*="rk-account"] button:last-child:hover {
+  background: #fef2f2 !important;
+  border-color: #fecaca !important;
+  color: #dc2626 !important;
+}
+
+/* Button Icons */
+[data-rk] [role="dialog"] [class*="rk-account"] button svg,
+[data-rk] [role="dialog"] [class*="rk-account"] [role="button"] svg {
+  width: 1rem !important;
+  height: 1rem !important;
+  flex-shrink: 0 !important;
+}
+
+/* Improve modal backdrop */
+[data-rk] [data-rk-overlay] {
+  background: rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+/* Account modal specific improvements */
+[data-rk] [role="dialog"][aria-label*="Account"],
+[data-rk] [role="dialog"][aria-label*="account"] {
+  border-radius: 1rem !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+  max-width: 20rem !important;
+  width: 100% !important;
+}
+
+/* Better spacing for account info section */
+[data-rk] [role="dialog"] [class*="rk-account"] > div:not(:last-child):not(:first-child) {
+  padding: 0 0.5rem !important;
+}
+
+/* Ensure text is centered in account modal */
+[data-rk] [role="dialog"] [class*="rk-account"] {
+  text-align: center !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+}

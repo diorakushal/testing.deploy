@@ -104,7 +104,13 @@ export async function calculateFinalGasFee(
   }
 
   // Get LATEST gas price (critical - this is the final calculation)
-  const gasPrice = await client.getGasPrice();
+  // Add timeout to prevent hanging
+  const gasPrice = await Promise.race([
+    client.getGasPrice(),
+    new Promise<bigint>((_, reject) => 
+      setTimeout(() => reject(new Error('Gas price fetch timeout')), 10000)
+    )
+  ]);
 
   // Estimate gas for ERC20 transfer
   const ERC20_ABI = [
@@ -122,18 +128,24 @@ export async function calculateFinalGasFee(
 
   let estimatedGas: bigint;
   try {
-    // Try to estimate actual gas needed
-    estimatedGas = await client.estimateGas({
-      account: fromAddress,
-      to: tokenAddress,
-      data: client.encodeFunctionData({
-        abi: ERC20_ABI,
-        functionName: 'transfer',
-        args: [recipient, amount]
-      })
-    });
+    // Try to estimate actual gas needed with timeout
+    estimatedGas = await Promise.race([
+      client.estimateGas({
+        account: fromAddress,
+        to: tokenAddress,
+        data: client.encodeFunctionData({
+          abi: ERC20_ABI,
+          functionName: 'transfer',
+          args: [recipient, amount]
+        })
+      }),
+      new Promise<bigint>((_, reject) => 
+        setTimeout(() => reject(new Error('Gas estimation timeout')), 10000)
+      )
+    ]);
     // Use exact estimated gas (no buffer)
   } catch (err) {
+    console.warn('Gas estimation failed, using fallback:', err);
     // Fallback to standard ERC20 transfer gas (typically ~65,000)
     estimatedGas = 65000n;
   }
@@ -149,10 +161,16 @@ export async function calculateFinalGasFee(
   let maxPriorityFeePerGas: bigint | undefined;
 
   try {
-    const feeHistory = await client.getFeeHistory({
-      blockCount: 1,
-      rewardPercentiles: [50] // 50th percentile (median)
-    });
+    // Add timeout to prevent hanging
+    const feeHistory = await Promise.race([
+      client.getFeeHistory({
+        blockCount: 1,
+        rewardPercentiles: [50] // 50th percentile (median)
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Fee history timeout')), 8000)
+      )
+    ]) as any;
     
     if (feeHistory.baseFeePerGas && feeHistory.baseFeePerGas.length > 0) {
       const baseFee = feeHistory.baseFeePerGas[feeHistory.baseFeePerGas.length - 1];
@@ -164,7 +182,8 @@ export async function calculateFinalGasFee(
     }
   } catch (err) {
     // Not an EIP-1559 chain or fee history not available
-    // Use gasPrice for legacy chains
+    // Use gasPrice for legacy chains - this is fine, continue without EIP-1559 fees
+    console.warn('Fee history not available, using legacy gas price');
   }
 
   return {

@@ -6,19 +6,14 @@ import Link from 'next/link';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useBalance } from 'wagmi';
 import { formatEther } from 'viem';
-import HowItWorksModal from './HowItWorksModal';
 import { supabase } from '@/lib/supabase';
 
 interface HeaderProps {
-  searchQuery?: string;
-  onSearchChange?: (query: string) => void;
-  showSearch?: boolean;
   onWalletConnect?: (address: string) => void;
 }
 
-export default function Header({ searchQuery = '', onSearchChange, showSearch = true, onWalletConnect }: HeaderProps) {
+export default function Header({ onWalletConnect }: HeaderProps) {
   const router = useRouter();
-  const [isHowItWorksOpen, setIsHowItWorksOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -127,9 +122,9 @@ export default function Header({ searchQuery = '', onSearchChange, showSearch = 
 
   return (
     <>
-      <header className="bg-white z-50 border-b border-gray-200">
+      <header className="bg-white z-50 sticky top-0">
         <div className="mx-auto px-4 sm:px-6 max-w-7xl">
-          <div className="flex items-center gap-3 sm:gap-4 py-3">
+          <div className="flex items-center gap-4 py-3.5">
             {/* Logo */}
             <div className="flex items-center flex-shrink-0">
               <Link href="/feed" className="flex items-center group">
@@ -138,53 +133,12 @@ export default function Header({ searchQuery = '', onSearchChange, showSearch = 
                 </h1>
               </Link>
             </div>
-            
-            {/* Search Bar */}
-            {showSearch && (
-              <div className="flex-1 min-w-0 max-w-2xl">
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                    <svg 
-                      className="w-4 h-4 text-gray-400" 
-                      fill="none" 
-                      viewBox="0 0 24 24" 
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Search by amount, token, caption, or address..."
-                    value={searchQuery}
-                    onChange={(e) => onSearchChange?.(e.target.value)}
-                    className="w-full px-3 py-2 pl-9 pr-3 bg-gray-100 rounded-lg text-sm outline-none focus:bg-white focus:ring-1 focus:ring-gray-300 transition-all duration-200 text-black placeholder-gray-500"
-                  />
-                </div>
-              </div>
-            )}
 
             {/* Right Side Actions */}
-            <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
-              {/* How it works */}
-              <button
-                onClick={() => setIsHowItWorksOpen(true)}
-                className="flex items-center gap-1.5 px-2 py-1.5 text-black hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors duration-200"
-              >
-                <svg 
-                  className="w-4 h-4" 
-                  fill="currentColor" 
-                  viewBox="0 0 20 20"
-                >
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                </svg>
-                <span className="text-sm font-medium hidden sm:inline">How it works</span>
-              </button>
-
+            <div className="flex items-center gap-3 flex-shrink-0 ml-auto">
               {/* Wallet Connection - RainbowKit ConnectButton - Only show when logged in */}
               {user && (
-                <div className="[&>button]:!rounded-lg [&>button]:!border [&>button]:!border-gray-200 [&>button]:!bg-white [&>button]:hover:!bg-gray-50 [&>button]:transition-all [&>button]:duration-200">
+                <div className="rainbowkit-wrapper">
                   <ConnectButton />
                 </div>
               )}
@@ -195,38 +149,50 @@ export default function Header({ searchQuery = '', onSearchChange, showSearch = 
                     {/* User Menu Button */}
                     <button
                       onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                      className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-gray-50 transition-colors duration-200 group border border-gray-200"
+                      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-50 transition-all duration-200 group border border-gray-200 bg-white"
                     >
-                    <div className="text-right">
-                        <div className="text-xs font-medium text-black leading-tight">
-                        {userProfile?.first_name && userProfile?.last_name
-                          ? `${userProfile.first_name} ${userProfile.last_name}`
-                          : userProfile?.first_name || user.email || 'User'}
-                      </div>
-                        <div className="text-[10px] text-gray-500 leading-tight">
-                        {userProfile?.username ? `@${userProfile.username}` : ''}
-                        </div>
-                      </div>
-                    {isConnected && address && (
-                        <div className="text-right border-l border-gray-200 pl-2.5">
-                          <div className="text-[10px] font-semibold text-black leading-tight">
-                            {`${address.slice(0, 6)}...${address.slice(-4)}`}
+                      {/* User Info Section */}
+                      <div className="flex items-center gap-3">
+                        <div className="text-left">
+                          <div className="text-sm font-semibold text-black leading-tight">
+                            {userProfile?.first_name && userProfile?.last_name
+                              ? `${userProfile.first_name} ${userProfile.last_name}`
+                              : userProfile?.first_name || user.email?.split('@')[0] || 'User'}
                           </div>
-                        {balance && (
-                          <div className="text-[9px] text-gray-500 leading-tight">
-                            {parseFloat(formatEther(balance.value)).toFixed(4)} {balance.symbol}
+                          {userProfile?.username && (
+                            <div className="text-xs text-gray-500 leading-tight">
+                              @{userProfile.username}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Wallet Info Section */}
+                        {isConnected && address && (
+                          <div className="flex items-center gap-2 pl-3 border-l border-gray-200">
+                            <div className="text-left">
+                              <div className="text-xs font-semibold text-black leading-tight font-mono">
+                                {`${address.slice(0, 6)}...${address.slice(-4)}`}
+                              </div>
+                              {balance && (
+                                <div className="text-xs text-gray-500 leading-tight">
+                                  {parseFloat(formatEther(balance.value)).toFixed(4)} {balance.symbol}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
-                </div>
-              )}
+                      </div>
+                      
+                      {/* Dropdown Icon */}
                       <svg 
-                        className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`}
-                  fill="none" 
-                  viewBox="0 0 24 24" 
-                  stroke="currentColor" 
-                >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
+                        className={`w-4 h-4 text-gray-400 transition-transform duration-200 flex-shrink-0 ${isUserMenuOpen ? 'rotate-180' : ''}`}
+                        fill="none" 
+                        viewBox="0 0 24 24" 
+                        stroke="currentColor" 
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
               </button>
 
                     {/* User Dropdown Menu */}
@@ -271,13 +237,13 @@ export default function Header({ searchQuery = '', onSearchChange, showSearch = 
                 <>
                   <Link
                     href="/login"
-                    className="text-black hover:text-gray-700 text-sm font-medium transition-colors duration-200"
+                    className="text-black hover:text-gray-700 text-sm font-medium transition-colors duration-200 px-3 py-2 rounded-lg hover:bg-gray-50"
                   >
                     Log In
                   </Link>
                   <Link
                     href="/signup"
-                    className="px-4 py-2.5 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors duration-200 text-sm font-medium"
+                    className="px-4 py-2.5 bg-black text-white rounded-lg hover:bg-gray-800 transition-all duration-200 text-sm font-semibold shadow-sm hover:shadow-md"
                   >
                     Sign Up
                   </Link>
@@ -287,12 +253,6 @@ export default function Header({ searchQuery = '', onSearchChange, showSearch = 
           </div>
         </div>
       </header>
-
-      {/* How It Works Modal */}
-      <HowItWorksModal 
-        isOpen={isHowItWorksOpen} 
-        onClose={() => setIsHowItWorksOpen(false)} 
-      />
     </>
   );
 }

@@ -55,7 +55,6 @@ export default function Feed() {
   const router = useRouter();
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
   const [isConnected, setIsConnected] = useState(false);
   const [connectedAddress, setConnectedAddress] = useState<string | undefined>();
   const [user, setUser] = useState<any>(null);
@@ -148,17 +147,6 @@ export default function Feed() {
     };
   }, [router, fetchPaymentRequests]);
 
-  // Filter payment requests by search query
-  const filteredPaymentRequests = searchQuery.trim() === '' 
-    ? paymentRequests 
-    : paymentRequests.filter((request) => {
-        const searchLower = searchQuery.toLowerCase();
-        return (
-          request.caption?.toLowerCase().includes(searchLower) ||
-          request.requester_address.toLowerCase().includes(searchLower) ||
-          request.amount.toString().includes(searchQuery)
-        );
-      });
 
   if (checkingAuth) {
     return (
@@ -179,8 +167,6 @@ export default function Feed() {
     <div className="min-h-screen bg-white h-screen overflow-y-auto">
       {/* CRITICAL: Must use Header component - DO NOT create custom header with "numo" */}
       <Header 
-        searchQuery={searchQuery} 
-        onSearchChange={setSearchQuery}
         onWalletConnect={(address: string) => {
           setIsConnected(true);
           setConnectedAddress(address);
@@ -209,18 +195,16 @@ export default function Feed() {
                   </div>
                 ))}
               </div>
-            ) : filteredPaymentRequests.length === 0 ? (
+            ) : paymentRequests.length === 0 ? (
               <div className="text-center py-16">
                 <p className="text-gray-600 text-lg">
-                  {searchQuery ? 'No payment requests match your search' : 'No payment requests found'}
+                  No payment requests found
                 </p>
-                {!searchQuery && (
-                  <p className="text-sm text-gray-500 mt-2">Create one in the sidebar</p>
-                )}
+                <p className="text-sm text-gray-500 mt-2">Create one in the sidebar</p>
               </div>
             ) : (
               <div className="flex flex-col gap-0">
-                {filteredPaymentRequests.map((request) => (
+                {paymentRequests.map((request) => (
                   <PaymentRequestCard 
                     key={request.id} 
                     request={request}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import axios from 'axios';
 import Link from 'next/link';
@@ -57,36 +57,73 @@ export default function PaymentRequestDetail() {
     checkAuth();
   }, [router]);
 
-  useEffect(() => {
-    if (!authLoading) {
-      fetchPaymentRequest();
-    }
-  }, [requestId, authLoading]);
-
-  const fetchPaymentRequest = async () => {
+  const fetchPaymentRequest = useCallback(async (showLoading = true) => {
+    console.log('[PaymentRequestDetail] 📡 Fetching payment request', {
+      requestId,
+      showLoading,
+      currentRequestStatus: request?.status
+    });
+    
     try {
-      setLoading(true);
+      if (showLoading) {
+        setLoading(true);
+      }
       const response = await axios.get(`${API_URL}/payment-requests/${requestId}`);
+      
+      console.log('[PaymentRequestDetail] ✅ Payment request fetched', {
+        requestId,
+        responseStatus: response.data?.status,
+        responseTxHash: response.data?.tx_hash,
+        responsePaidBy: response.data?.paid_by,
+        previousStatus: request?.status,
+        statusChanged: request?.status !== response.data?.status
+      });
+      
       setRequest(response.data);
     } catch (error: any) {
-      console.error('Error fetching payment request:', error);
-      console.log('Request ID:', requestId);
-      console.log('Error details:', {
+      console.error('[PaymentRequestDetail] ❌ Error fetching payment request', {
+        error,
+        requestId,
         status: error.response?.status,
         code: error.code,
         message: error.message
       });
       
-      // No mock data fallback - show error if request not found
-      if (error.response?.status === 404) {
-        toast.error('Crypto request not found');
-      } else {
-        toast.error('Failed to load crypto request');
+      // Only show error toast on initial load, not during polling
+      if (showLoading) {
+        // No mock data fallback - show error if request not found
+        if (error.response?.status === 404) {
+          toast.error('Crypto request not found');
+        } else {
+          toast.error('Failed to load crypto request');
+        }
       }
     } finally {
-      setLoading(false);
+      if (showLoading) {
+        setLoading(false);
+      }
     }
-  };
+  }, [requestId, request?.status]);
+
+  useEffect(() => {
+    if (!authLoading) {
+      fetchPaymentRequest(true); // Show loading on initial fetch
+    }
+  }, [requestId, authLoading, fetchPaymentRequest]);
+
+  // Poll for status updates if request is open
+  useEffect(() => {
+    if (!request || request.status !== 'open') {
+      return;
+    }
+    
+    // Poll every 5 seconds to check for status updates
+    const interval = setInterval(() => {
+      fetchPaymentRequest(false); // Don't show loading during polling
+    }, 5000);
+    
+    return () => clearInterval(interval);
+  }, [request?.id, request?.status, fetchPaymentRequest]);
 
   // Show loading while checking authentication
   if (authLoading || loading) {
@@ -120,7 +157,6 @@ export default function PaymentRequestDetail() {
     <div className="min-h-screen bg-white h-screen overflow-y-auto">
       {/* Header */}
       <Header 
-        showSearch={false}
         onWalletConnect={(address: string) => {
           setIsConnected(true);
           setConnectedAddress(address);
@@ -133,7 +169,10 @@ export default function PaymentRequestDetail() {
           <PaymentRequestCard 
             request={request}
             userAddress={connectedAddress}
-            onPaymentSuccess={fetchPaymentRequest}
+            onPaymentSuccess={() => {
+              console.log('[PaymentRequestDetail] 🔄 onPaymentSuccess called - refreshing request data');
+              fetchPaymentRequest(false); // Don't show loading spinner on refresh
+            }}
           />
         </div>
       </main>

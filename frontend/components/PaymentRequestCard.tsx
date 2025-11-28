@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { formatUnits, parseUnits, Address, isAddress } from 'viem';
@@ -55,6 +55,15 @@ interface PaymentRequestCardProps {
 }
 
 export default function PaymentRequestCard({ request, userAddress, onPaymentSuccess }: PaymentRequestCardProps) {
+  console.log('[PaymentRequestCard] 🎨 Component render', {
+    requestId: request.id,
+    requestStatus: request.status,
+    requestTxHash: request.tx_hash,
+    requestPaidBy: request.paid_by,
+    hasOnPaymentSuccess: !!onPaymentSuccess,
+    userAddress
+  });
+
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
@@ -63,19 +72,56 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
     hash,
     enabled: !!hash 
   });
+  
+  console.log('[PaymentRequestCard] 🔗 Wagmi hooks state', {
+    address,
+    isConnected,
+    chainId,
+    hash,
+    isPending,
+    isConfirming,
+    isSuccess,
+    hasError: !!error
+  });
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasMarkedPaid, setHasMarkedPaid] = useState(false);
+  const [localPaidStatus, setLocalPaidStatus] = useState(false);
+  const [localTxHash, setLocalTxHash] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [finalGasFee, setFinalGasFee] = useState<{ feeInToken: number; feeInUSD: number; feeInNative: string } | null>(null);
   const [isCalculatingGas, setIsCalculatingGas] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
-  const isPaid = request.status === 'paid';
-  const isOpen = request.status === 'open';
+  const isPaid = localPaidStatus || request.status === 'paid';
+  const isOpen = request.status === 'open' && !localPaidStatus;
+  const isUpdatingStatusRef = useRef(false);
+  const retryCountRef = useRef(0);
   // Use address from useAccount() hook (connected wallet) or userAddress prop as fallback
   const currentUserAddress = address || userAddress;
   const isOwnRequest = currentUserAddress?.toLowerCase() === request.requester_address.toLowerCase();
+
+  // Sync local state with request prop when it updates from parent
+  useEffect(() => {
+    console.log('[PaymentRequestCard] 🔄 Request prop updated', {
+      requestStatus: request.status,
+      requestTxHash: request.tx_hash,
+      localPaidStatus,
+      localTxHash,
+      requestId: request.id
+    });
+    
+    if (request.status === 'paid') {
+      console.log('[PaymentRequestCard] ✅ Request status is paid - syncing local state');
+      setLocalPaidStatus(true);
+      if (request.tx_hash && !localTxHash) {
+        console.log('[PaymentRequestCard] 📝 Setting local tx hash from request prop', {
+          txHash: request.tx_hash
+        });
+        setLocalTxHash(request.tx_hash);
+      }
+    }
+  }, [request.status, request.tx_hash, request.id, localPaidStatus, localTxHash]);
 
   const formatAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
@@ -187,12 +233,14 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
 
       // Check if we need to switch chains first
       if (chainId !== chainIdNum) {
+        console.log('[PaymentRequestCard] 🔄 Switching chain', { from: chainId, to: chainIdNum });
         toast.loading(`Switching to ${chainConfig.name}...`);
         try {
           if (switchChain) {
             try {
               await switchChain({ chainId: chainIdNum as any });
-              await new Promise(resolve => setTimeout(resolve, 2000));
+              // Reduced delay - just wait for chain switch confirmation
+              await new Promise(resolve => setTimeout(resolve, 1000));
             } catch (switchError: any) {
               if (window.ethereum) {
                 await window.ethereum.request({
@@ -205,9 +253,10 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
                     blockExplorerUrls: [chainConfig.explorer]
                   }]
                 });
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                // Reduced delays
+                await new Promise(resolve => setTimeout(resolve, 1000));
                 await switchChain({ chainId: chainIdNum as any });
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                await new Promise(resolve => setTimeout(resolve, 1000));
               } else {
                 throw switchError;
               }
@@ -215,7 +264,7 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
           }
         } catch (switchError: any) {
           toast.dismiss();
-          console.error('Chain switch error:', switchError);
+          console.error('[PaymentRequestCard] ❌ Chain switch error:', switchError);
           toast.error('Failed to switch network. Please switch manually in your wallet.');
           setIsCalculatingGas(false);
           return;
@@ -227,15 +276,32 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
       const decimals = token?.decimals || 6;
       const amountInWei = parseUnits(request.amount.toString(), decimals);
 
-      // STEP 2: Calculate FINAL gas fee with latest network prices
-      const gasFeeResult = await calculateFinalGasFee({
+      console.log('[PaymentRequestCard] ⛽ Starting gas calculation', {
         chainId: chainIdNum,
-        tokenAddress: request.token_address as Address,
         tokenSymbol: request.token_symbol,
-        tokenDecimals: decimals,
-        recipient: request.requester_address as Address,
-        amount: amountInWei,
-        fromAddress: address as Address
+        amount: request.amount
+      });
+      
+      // STEP 2: Calculate FINAL gas fee with latest network prices
+      // Add timeout to prevent hanging
+      const gasFeeResult = await Promise.race([
+        calculateFinalGasFee({
+          chainId: chainIdNum,
+          tokenAddress: request.token_address as Address,
+          tokenSymbol: request.token_symbol,
+          tokenDecimals: decimals,
+          recipient: request.requester_address as Address,
+          amount: amountInWei,
+          fromAddress: address as Address
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Gas calculation timeout after 15 seconds')), 15000)
+        )
+      ]) as any;
+      
+      console.log('[PaymentRequestCard] ✅ Gas calculation complete', {
+        feeInToken: gasFeeResult.feeInToken,
+        feeInUSD: gasFeeResult.feeInUSD
       });
 
       setFinalGasFee({
@@ -257,37 +323,34 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
     }
   };
 
-  // Step 2: Execute transaction with final gas fee (recalculated right before broadcast)
+  // Step 2: Execute transaction with final gas fee (use already calculated fee)
   const handleConfirmPayment = async () => {
-    if (!address || !finalGasFee) return;
+    if (!address || !finalGasFee) {
+      console.error('[PaymentRequestCard] ❌ Cannot confirm payment - missing address or gas fee');
+      return;
+    }
 
     const chainIdNum = typeof request.chain_id === 'string' ? parseInt(request.chain_id) : request.chain_id;
+    
+    console.log('[PaymentRequestCard] 💳 Confirming payment', {
+      requestId: request.id,
+      amount: request.amount,
+      tokenSymbol: request.token_symbol,
+      chainId: chainIdNum
+    });
     
     try {
       setIsProcessing(true);
       setShowConfirmModal(false);
       toast.loading('Sending payment...');
 
-      // Recalculate gas fee ONE MORE TIME right before transaction (most up-to-date)
-      let finalGasFeeResult;
-      try {
-        const token = getToken(request.token_symbol, chainIdNum);
-        const decimals = token?.decimals || 6;
-        const amountInWei = parseUnits(request.amount.toString(), decimals);
-
-        finalGasFeeResult = await calculateFinalGasFee({
-          chainId: chainIdNum,
-          tokenAddress: request.token_address as Address,
-          tokenSymbol: request.token_symbol,
-          tokenDecimals: decimals,
-          recipient: request.requester_address as Address,
-          amount: amountInWei,
-          fromAddress: address as Address
-        });
-      } catch (gasError) {
-        console.warn('Failed to recalculate gas, using previous estimate:', gasError);
-        // Continue with previous estimate if recalculation fails
-      }
+      // Use the already calculated gas fee - no need to recalculate (saves time)
+      // The gas fee was calculated right before showing the modal, so it's still fresh
+      const finalGasFeeResult = finalGasFee;
+      console.log('[PaymentRequestCard] ⛽ Using pre-calculated gas fee', {
+        feeInToken: finalGasFeeResult.feeInToken,
+        feeInUSD: finalGasFeeResult.feeInUSD
+      });
 
       // Validate token address
       if (!isAddress(request.token_address)) {
@@ -339,30 +402,225 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
 
   // Handle transaction success
   useEffect(() => {
-    if (isSuccess && hash && !isPaid && !hasMarkedPaid && address) {
+    console.log('[PaymentRequestCard] Transaction status effect triggered', {
+      isSuccess,
+      hash,
+      isPaid,
+      hasMarkedPaid,
+      address,
+      requestId: request.id,
+      requestStatus: request.status,
+      isUpdatingStatus: isUpdatingStatusRef.current,
+      localPaidStatus,
+      localTxHash
+    });
+
+    // Prevent multiple simultaneous calls
+    if (isSuccess && hash && !isPaid && !hasMarkedPaid && address && !isUpdatingStatusRef.current) {
+      console.log('[PaymentRequestCard] ✅ Transaction succeeded - starting status update flow', {
+        hash,
+        requestId: request.id,
+        address,
+        currentRequestStatus: request.status
+      });
+      
+      isUpdatingStatusRef.current = true;
       setHasMarkedPaid(true);
-      // Mark request as paid
-      axios.patch(`${API_URL}/payment-requests/${request.id}/paid`, {
-        txHash: hash,
-        paidBy: address
-      })
-        .then(() => {
-          toast.success('Payment sent successfully!');
-          setIsProcessing(false);
-          if (onPaymentSuccess) {
-            onPaymentSuccess();
-          }
-        })
-        .catch((err) => {
-          console.error('Error updating payment status:', err);
-          toast.error('Payment sent but failed to update status');
-          setIsProcessing(false);
-          setHasMarkedPaid(false);
+      
+      // Immediately update local state to reflect paid status
+      console.log('[PaymentRequestCard] 🔄 Setting local paid status to true', { hash });
+      setLocalPaidStatus(true);
+      setLocalTxHash(hash);
+      
+      const updateStatus = async (retryCount = 0) => {
+        console.log(`[PaymentRequestCard] 📡 Attempting to update payment status (attempt ${retryCount + 1})`, {
+          requestId: request.id,
+          txHash: hash,
+          paidBy: address,
+          retryCount
         });
+        
+        try {
+          const response = await axios.patch(`${API_URL}/payment-requests/${request.id}/paid`, {
+            txHash: hash,
+            paidBy: address
+          });
+          
+          console.log('[PaymentRequestCard] ✅ Status update successful', {
+            requestId: request.id,
+            responseData: response.data,
+            responseStatus: response.status
+          });
+          
+          // Success - reset retry count and update flag
+          retryCountRef.current = 0;
+          isUpdatingStatusRef.current = false;
+          
+          // Get explorer URL for the transaction
+          const chainConfig = getChainConfig(typeof request.chain_id === 'string' ? request.chain_id : request.chain_id);
+          const explorerUrl = chainConfig?.explorer 
+            ? `${chainConfig.explorer}/tx/${hash}`
+            : `https://basescan.org/tx/${hash}`;
+          
+          console.log('[PaymentRequestCard] 🎉 Payment completed successfully', {
+            explorerUrl,
+            requestId: request.id
+          });
+          
+          toast.success(
+            <div className="flex flex-col gap-1">
+              <span>Payment sent successfully!</span>
+              <a 
+                href={explorerUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-xs underline hover:no-underline"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Verify transaction →
+              </a>
+            </div>,
+            { duration: 6000 }
+          );
+          setIsProcessing(false);
+          
+          // Update local request state if response includes updated data
+          if (response?.data) {
+            console.log('[PaymentRequestCard] 📦 Response includes updated data', {
+              updatedStatus: response.data.status,
+              updatedTxHash: response.data.tx_hash,
+              updatedPaidBy: response.data.paid_by
+            });
+            // The parent component should handle this via onPaymentSuccess
+            // but we can also trigger a refresh
+          }
+          
+          if (onPaymentSuccess) {
+            console.log('[PaymentRequestCard] 🔄 Calling onPaymentSuccess callback after 500ms delay');
+            // Add a small delay to ensure backend has processed the update
+            setTimeout(() => {
+              console.log('[PaymentRequestCard] 🔄 Executing onPaymentSuccess callback now');
+              onPaymentSuccess();
+            }, 500);
+          } else {
+            console.warn('[PaymentRequestCard] ⚠️ onPaymentSuccess callback not provided');
+          }
+        } catch (err: any) {
+          console.error('[PaymentRequestCard] ❌ Error updating payment status', {
+            error: err,
+            message: err.message,
+            response: err.response?.data,
+            status: err.response?.status,
+            statusText: err.response?.statusText,
+            requestId: request.id,
+            txHash: hash,
+            paidBy: address,
+            retryCount,
+            willRetry: retryCount < 3,
+            apiUrl: `${API_URL}/payment-requests/${request.id}/paid`,
+            requestBody: {
+              txHash: hash,
+              paidBy: address
+            }
+          });
+          
+          // Log the full error for debugging
+          if (err.response) {
+            console.error('[PaymentRequestCard] ❌ API Error Response Details', {
+              status: err.response.status,
+              statusText: err.response.statusText,
+              data: err.response.data,
+              headers: err.response.headers
+            });
+          } else if (err.request) {
+            console.error('[PaymentRequestCard] ❌ Network Error - No response received', {
+              request: err.request,
+              message: 'The request was made but no response was received'
+            });
+          } else {
+            console.error('[PaymentRequestCard] ❌ Request Setup Error', {
+              message: err.message,
+              stack: err.stack
+            });
+          }
+          
+          // Retry logic - try up to 3 times with exponential backoff
+          if (retryCount < 3) {
+            const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+            retryCountRef.current = retryCount + 1;
+            
+            console.log(`[PaymentRequestCard] 🔄 Scheduling retry ${retryCount + 1} in ${delay}ms`);
+            setTimeout(() => {
+              updateStatus(retryCount + 1);
+            }, delay);
+          } else {
+            // Max retries reached - show error but don't reset hasMarkedPaid to prevent re-triggering
+            console.error('[PaymentRequestCard] ❌ Max retries reached - status update failed', {
+              requestId: request.id,
+              txHash: hash,
+              finalError: err.message
+            });
+            isUpdatingStatusRef.current = false;
+            toast.error('Payment sent but failed to update status. Please refresh the page.', {
+              duration: 5000,
+            });
+            setIsProcessing(false);
+            // Don't reset hasMarkedPaid to prevent the effect from running again
+            // The payment listener script should eventually catch it
+          }
+        }
+      };
+      
+      updateStatus();
+    } else {
+      console.log('[PaymentRequestCard] ⏭️ Skipping status update - conditions not met', {
+        isSuccess,
+        hasHash: !!hash,
+        isPaid,
+        hasMarkedPaid,
+        hasAddress: !!address,
+        isUpdating: isUpdatingStatusRef.current,
+        reason: !isSuccess ? 'Transaction not successful' :
+                !hash ? 'No transaction hash' :
+                isPaid ? 'Already marked as paid' :
+                hasMarkedPaid ? 'Already marked as paid (local)' :
+                !address ? 'No address' :
+                isUpdatingStatusRef.current ? 'Already updating' : 'Unknown'
+      });
     }
-  }, [isSuccess, hash, isPaid, hasMarkedPaid, address, request.id, onPaymentSuccess]);
+    
+    // Cleanup function
+    return () => {
+      // Reset ref if component unmounts
+      if (!isSuccess) {
+        console.log('[PaymentRequestCard] 🧹 Cleaning up - resetting update ref');
+        isUpdatingStatusRef.current = false;
+      }
+    };
+  }, [isSuccess, hash, isPaid, hasMarkedPaid, address, request.id, onPaymentSuccess, localPaidStatus, localTxHash, request.status, request.chain_id]);
 
   const isLoading = isPending || isConfirming || isProcessing || isCalculatingGas;
+
+  // Debug logging for state changes (placed after isLoading is defined)
+  useEffect(() => {
+    console.log('[PaymentRequestCard] 📊 State update', {
+      requestId: request.id,
+      requestStatus: request.status,
+      localPaidStatus,
+      localTxHash,
+      isPaid,
+      isOpen,
+      hasMarkedPaid,
+      isSuccess,
+      hash,
+      address,
+      isProcessing,
+      isLoading,
+      isPending,
+      isConfirming,
+      isCalculatingGas
+    });
+  }, [request.id, request.status, localPaidStatus, localTxHash, isPaid, isOpen, hasMarkedPaid, isSuccess, hash, address, isProcessing, isLoading, isPending, isConfirming, isCalculatingGas]);
 
   return (
     <>
@@ -562,92 +820,125 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
             )}
           </div>
 
-          {/* Accept & Send button, Cancel button, and Share button */}
-          <div className="pt-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {isOpen && !isPaid && (
-                <>
-                  {isOwnRequest ? (
-                    <button
-                      onClick={handleCancelClick}
-                      disabled={isCancelling || !isConnected}
-                      className="px-5 py-2 rounded-full text-xs font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 active:scale-[0.98] shadow-sm hover:shadow-md"
-                    >
-                      {isCancelling ? (
-                        <span className="flex items-center gap-2">
-                          <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Cancelling...
-                        </span>
-                      ) : (
-                        'Cancel Request'
-                      )}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleAccept}
-                      disabled={isLoading || !isConnected}
-                      className="px-5 py-2 rounded-full text-xs font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-black text-white hover:bg-gray-800 active:scale-[0.98] shadow-sm hover:shadow-md"
-                    >
-                      {isCalculatingGas ? (
-                        <span className="flex items-center gap-2">
-                          <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Calculating fee...
-                        </span>
-                      ) : isLoading ? (
-                        <span className="flex items-center gap-2">
-                          <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Processing...
-                        </span>
-                      ) : !isConnected ? (
-                        'Connect Wallet to Pay'
-                      ) : (
-                        'Accept & Send'
-                      )}
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-            <button
-              onClick={handleShare}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold text-gray-600 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 border border-gray-200 transition-all duration-200 active:scale-[0.98]"
-              title="Share crypto request"
-              aria-label="Share crypto request"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-              </svg>
-              <span>Share</span>
-            </button>
-          </div>
-
-          {/* Transaction link for paid requests */}
-          {isPaid && request.tx_hash && (
-            <div className="pt-2">
-              <a
-                href={getChainConfig(typeof request.chain_id === 'string' ? request.chain_id : request.chain_id)?.explorer 
-                  ? `${getChainConfig(typeof request.chain_id === 'string' ? request.chain_id : request.chain_id)!.explorer}/tx/${request.tx_hash}`
-                  : `https://basescan.org/tx/${request.tx_hash}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs text-[#2952FF] hover:text-[#1a3dcc] font-medium transition-colors group"
+          {/* Action buttons and verification - combined in one section */}
+          <div className="pt-4 space-y-4">
+            {/* Accept & Send button, Cancel button, and Share button */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {(() => {
+                  const shouldShowButton = isOpen && !isPaid;
+                  console.log('[PaymentRequestCard] 🔘 Button visibility check', {
+                    isOpen,
+                    isPaid,
+                    localPaidStatus,
+                    requestStatus: request.status,
+                    shouldShowButton,
+                    isLoading,
+                    isConnected,
+                    requestId: request.id
+                  });
+                  return shouldShowButton;
+                })() && (
+                  <>
+                    {isOwnRequest ? (
+                      <button
+                        onClick={handleCancelClick}
+                        disabled={isCancelling || !isConnected}
+                        className="px-5 py-2 rounded-full text-xs font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-white text-gray-700 hover:bg-gray-50 border border-gray-300 active:scale-[0.98] shadow-sm hover:shadow-md"
+                      >
+                        {isCancelling ? (
+                          <span className="flex items-center gap-2">
+                            <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Cancelling...
+                          </span>
+                        ) : (
+                          'Cancel Request'
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleAccept}
+                        disabled={isLoading || !isConnected}
+                        className="px-5 py-2 rounded-full text-xs font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-black text-white hover:bg-gray-800 active:scale-[0.98] shadow-sm hover:shadow-md"
+                      >
+                        {isCalculatingGas ? (
+                          <span className="flex items-center gap-2">
+                            <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Calculating fee...
+                          </span>
+                        ) : isLoading ? (
+                          <span className="flex items-center gap-2">
+                            <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Processing...
+                          </span>
+                        ) : !isConnected ? (
+                          'Connect Wallet to Pay'
+                        ) : (
+                          'Accept & Send'
+                        )}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+              <button
+                onClick={handleShare}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold text-gray-600 hover:text-gray-900 bg-gray-50 hover:bg-gray-100 border border-gray-200 transition-all duration-200 active:scale-[0.98]"
+                title="Share crypto request"
+                aria-label="Share crypto request"
               >
-                <span>View transaction</span>
-                <svg className="w-3.5 h-3.5 transform group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                 </svg>
-              </a>
+                <span>Share</span>
+              </button>
             </div>
-          )}
+
+            {/* Transaction verification for paid requests - integrated into same card */}
+            {isPaid && (localTxHash || request.tx_hash) && (
+              <div className="bg-[#00D07E]/5 border border-[#00D07E]/20 rounded-lg p-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5 text-[#00D07E]" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <h4 className="text-sm font-semibold text-gray-900">Payment Completed</h4>
+                </div>
+                <p className="text-xs text-gray-600">
+                  Your payment has been successfully processed. Verify the transaction on the blockchain explorer.
+                </p>
+                <a
+                  href={getChainConfig(typeof request.chain_id === 'string' ? request.chain_id : request.chain_id)?.explorer 
+                    ? `${getChainConfig(typeof request.chain_id === 'string' ? request.chain_id : request.chain_id)!.explorer}/tx/${localTxHash || request.tx_hash}`
+                    : `https://basescan.org/tx/${localTxHash || request.tx_hash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#2952FF] text-white rounded-lg hover:bg-[#1a3dcc] font-semibold text-sm transition-all duration-200 shadow-sm hover:shadow-md group"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  <span>Verify Transaction</span>
+                  <svg className="w-4 h-4 transform group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </a>
+                <div className="pt-2 border-t border-[#00D07E]/10">
+                  <p className="text-[10px] text-gray-500 font-mono break-all">
+                    TX: {(localTxHash || request.tx_hash)?.slice(0, 20)}...{(localTxHash || request.tx_hash)?.slice(-10)}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

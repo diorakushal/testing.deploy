@@ -109,7 +109,6 @@ export default function MarketDetail() {
     <div className="min-h-screen bg-white h-screen overflow-y-auto">
       {/* Header */}
       <Header 
-        showSearch={false}
         onWalletConnect={(address: string) => {
           setIsConnected(true);
           setConnectedAddress(address);
