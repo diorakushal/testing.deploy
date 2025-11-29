@@ -26,6 +26,7 @@ export default function SignUpPage() {
   const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const [emailError, setEmailError] = useState('');
   const [checkingUsername, setCheckingUsername] = useState(false);
+  const [checkingEmail, setCheckingEmail] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -57,20 +58,58 @@ export default function SignUpPage() {
 
     try {
       setCheckingUsername(true);
-      // TODO: Replace with actual API endpoint
-      // const response = await axios.get(`${API_URL}/auth/check-username/${username}`);
-      // if (!response.data.available) {
-      //   setUsernameError('This username is already taken');
-      // }
+      setUsernameError('');
       
-      // Simulate API call - remove this when implementing real API
-      await new Promise(resolve => setTimeout(resolve, 500));
-    } catch (error: any) {
-      if (error.response?.status === 409) {
+      // Check if username already exists in users table
+      const { data, error } = await supabase
+        .from('users')
+        .select('username')
+        .eq('username', username)
+        .maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned (which is good)
+        console.error('Error checking username:', error);
+        return;
+      }
+      
+      if (data) {
         setUsernameError('This username is already taken');
       }
+    } catch (error: any) {
+      console.error('Error checking username availability:', error);
     } finally {
       setCheckingUsername(false);
+    }
+  };
+
+  const checkEmailAvailability = async (email: string) => {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return;
+    }
+
+    try {
+      setCheckingEmail(true);
+      setEmailError('');
+      
+      // Check if email already exists in users table
+      const { data, error } = await supabase
+        .from('users')
+        .select('email')
+        .eq('email', email.toLowerCase().trim())
+        .maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned (which is good)
+        console.error('Error checking email:', error);
+        return;
+      }
+      
+      if (data) {
+        setEmailError('This email is already registered. Please log in instead.');
+      }
+    } catch (error: any) {
+      console.error('Error checking email availability:', error);
+    } finally {
+      setCheckingEmail(false);
     }
   };
 
@@ -92,6 +131,20 @@ export default function SignUpPage() {
     return () => clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.username]);
+
+  // Debounced email availability check
+  useEffect(() => {
+    if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      checkEmailAvailability(formData.email);
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.email]);
 
   const validateUsername = (username: string) => {
     setUsernameError('');
@@ -267,6 +320,36 @@ export default function SignUpPage() {
       setLoading(true);
       
       try {
+        // Final check: Verify username and email are still available before signup
+        const [usernameCheck, emailCheck] = await Promise.all([
+          supabase
+            .from('users')
+            .select('username')
+            .eq('username', formData.username)
+            .maybeSingle(),
+          supabase
+            .from('users')
+            .select('email')
+            .eq('email', formData.email.toLowerCase().trim())
+            .maybeSingle()
+        ]);
+
+        if (usernameCheck.data) {
+          setEmailError('');
+          setUsernameError('This username is already taken');
+          toast.error('This username is already taken. Please choose another.');
+          setCurrentStep(1); // Go back to step 1 to fix username
+          setLoading(false);
+          return;
+        }
+
+        if (emailCheck.data) {
+          setEmailError('This email is already registered. Please log in instead.');
+          toast.error('This email is already registered. Please log in instead.');
+          setLoading(false);
+          return;
+        }
+
         // Sign up user with Supabase Auth
         // This will automatically send a confirmation email
         const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -283,6 +366,13 @@ export default function SignUpPage() {
         });
 
         if (authError) {
+          // Handle Supabase auth errors (including duplicate email)
+          if (authError.message?.includes('already registered') || authError.message?.includes('already exists')) {
+            setEmailError('This email is already registered. Please log in instead.');
+            toast.error('This email is already registered. Please log in instead.');
+            setLoading(false);
+            return;
+          }
           throw authError;
         }
 
@@ -293,14 +383,27 @@ export default function SignUpPage() {
             .from('users')
             .insert({
               id: authData.user.id,
-              email: formData.email,
+              email: formData.email.toLowerCase().trim(),
               first_name: formData.firstName,
               last_name: formData.lastName,
               username: formData.username,
               email_verified: false, // Will be updated when they confirm
             });
 
-          if (profileError && profileError.code !== '23505') { // Ignore duplicate key errors
+          if (profileError) {
+            // Handle duplicate username or email errors
+            if (profileError.code === '23505') { // Unique constraint violation
+              if (profileError.message?.includes('username')) {
+                setUsernameError('This username is already taken');
+                toast.error('This username is already taken. Please choose another.');
+                setCurrentStep(1);
+              } else if (profileError.message?.includes('email')) {
+                setEmailError('This email is already registered. Please log in instead.');
+                toast.error('This email is already registered. Please log in instead.');
+              }
+              setLoading(false);
+              return;
+            }
             console.error('Error creating user profile:', profileError);
           }
 
@@ -315,7 +418,8 @@ export default function SignUpPage() {
         console.error('Sign up error:', error);
         
         // Handle specific Supabase errors
-        if (error.message?.includes('already registered')) {
+        if (error.message?.includes('already registered') || error.message?.includes('already exists')) {
+          setEmailError('This email is already registered. Please log in instead.');
           toast.error('This email is already registered. Please log in instead.');
         } else if (error.message?.includes('password')) {
           toast.error('Password does not meet requirements.');
@@ -541,18 +645,28 @@ export default function SignUpPage() {
                 <label htmlFor="email" className="block text-sm font-medium text-black mb-2">
                   Email
                 </label>
-                <input
-                  type="email"
-                  id="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all text-black placeholder-gray-400 ${
-                    emailError ? 'border-red-300' : 'border-gray-300'
-                  }`}
-                  placeholder="john@example.com"
-                  required
-                />
+                  <div className="relative">
+                    <input
+                      type="email"
+                      id="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      className={`w-full px-4 py-2.5 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all text-black placeholder-gray-400 ${
+                        emailError ? 'border-red-300' : 'border-gray-300'
+                      }`}
+                      placeholder="john@example.com"
+                      required
+                    />
+                    {checkingEmail && (
+                      <span className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                        <svg className="animate-spin h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      </span>
+                    )}
+                  </div>
                 {emailError ? (
                   <p className="text-xs text-red-500 mt-1">{emailError}</p>
                 ) : (

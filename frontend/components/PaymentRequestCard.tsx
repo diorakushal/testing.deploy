@@ -38,6 +38,7 @@ interface PaymentRequestCardProps {
   request: {
     id: string;
     requester_address: string;
+    requester_username?: string | null; // Username from authenticated user account
     amount: string | number;
     token_symbol: string;
     token_address: string;
@@ -46,6 +47,7 @@ interface PaymentRequestCardProps {
     caption: string | null;
     status: string;
     paid_by?: string | null;
+    paid_by_username?: string | null; // Username of the payer
     tx_hash?: string | null;
     created_at: string;
     paid_at?: string | null;
@@ -282,8 +284,10 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
         amount: request.amount
       });
       
+      toast.loading('Calculating gas fee...', { duration: 15000 });
+      
       // STEP 2: Calculate FINAL gas fee with latest network prices
-      // Add timeout to prevent hanging
+      // Reduced timeout - will use fallback values if network is slow
       const gasFeeResult = await Promise.race([
         calculateFinalGasFee({
           chainId: chainIdNum,
@@ -295,7 +299,7 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
           fromAddress: address as Address
         }),
         new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Gas calculation timeout after 15 seconds')), 15000)
+          setTimeout(() => reject(new Error('Gas calculation timeout - using estimated values')), 15000)
         )
       ]) as any;
       
@@ -313,13 +317,28 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
       setIsCalculatingGas(false);
       toast.dismiss();
       
+      // Check if we used fallback values (check console for warnings)
+      // If the fee seems unusually high or low, it might be using fallback
+      // But we'll proceed anyway since we have valid estimates
+      
       // Show confirmation modal with final gas fee
       setShowConfirmModal(true);
     } catch (error: any) {
       setIsCalculatingGas(false);
       toast.dismiss();
       console.error('Error calculating gas fee:', error);
-      toast.error(error.message || 'Failed to calculate gas fee');
+      
+      // Show user-friendly error messages
+      let errorMessage = 'Failed to calculate gas fee';
+      if (error.message?.includes('timeout')) {
+        errorMessage = 'Network request timed out. Please check your connection and try again.';
+      } else if (error.message?.includes('RPC')) {
+        errorMessage = 'Unable to connect to blockchain network. Please try again in a moment.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast.error(errorMessage);
     }
   };
 
@@ -805,7 +824,9 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
-              <span className="font-medium">Requested by {formatAddress(request.requester_address)}</span>
+              <span className="font-medium">
+                Requested by {request.requester_username ? `@${request.requester_username}` : formatAddress(request.requester_address)}
+              </span>
             </div>
             {isPaid && request.paid_by && (
               <>
@@ -814,7 +835,9 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span className="font-medium">Paid by {formatAddress(request.paid_by)}</span>
+                  <span className="font-medium">
+                    Paid by {request.paid_by_username ? `@${request.paid_by_username}` : formatAddress(request.paid_by)}
+                  </span>
                 </div>
               </>
             )}

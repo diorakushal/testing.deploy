@@ -14,6 +14,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 interface PaymentRequest {
   id: string;
   requester_address: string;
+  requester_username?: string | null; // Username from authenticated user account
   amount: string | number;
   token_symbol: string;
   token_address: string;

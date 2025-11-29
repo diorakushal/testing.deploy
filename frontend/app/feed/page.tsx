@@ -25,7 +25,7 @@
  * ============================================================================
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import PaymentRequestCard from '@/components/PaymentRequestCard';
@@ -38,6 +38,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 interface PaymentRequest {
   id: string;
   requester_address: string;
+  requester_username?: string | null; // Username from authenticated user account
   amount: string | number;
   token_symbol: string;
   token_address: string;
@@ -46,6 +47,7 @@ interface PaymentRequest {
   caption: string | null;
   status: string;
   paid_by?: string | null;
+  paid_by_username?: string | null; // Username of the payer
   tx_hash?: string | null;
   created_at: string;
   paid_at?: string | null;
@@ -59,39 +61,88 @@ export default function Feed() {
   const [connectedAddress, setConnectedAddress] = useState<string | undefined>();
   const [user, setUser] = useState<any>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const fetchingRef = useRef(false);
 
   /**
    * Fetch payment requests from API
    * NOTE: No mock data fallback - shows empty state if API fails or returns no data
+   * Filters by authenticated user's ID to show only their payment requests
    */
   const fetchPaymentRequests = useCallback(async () => {
+    // Prevent multiple simultaneous fetches
+    if (fetchingRef.current) {
+      console.log('Already fetching payment requests, skipping...');
+      return;
+    }
+    
     try {
+      fetchingRef.current = true;
       setLoading(true);
-      console.log('Fetching payment requests from:', `${API_URL}/payment-requests`);
+      console.log('[Feed] Starting to fetch payment requests...');
       
-      // Fetch all requests (no status filter to get both open and paid)
-      const response = await axios.get(`${API_URL}/payment-requests`, {
-        timeout: 5000 // 5 second timeout
-      });
-      console.log('Payment requests response:', response.data);
+      // Get authenticated user ID
+      const { data: { session } } = await supabase.auth.getSession();
+      const userId = session?.user?.id;
       
-      // If we got data, use it
-      if (response.data && response.data.length > 0) {
+      if (userId) {
+        // Show requests created by user OR sent to user
+        // Fetch both and combine them
+        console.log('Fetching payment requests FROM and TO user:', userId);
+        
+        const [fromUser, toUser] = await Promise.all([
+          axios.get(`${API_URL}/payment-requests`, {
+            params: { requester_user_id: userId },
+            timeout: 10000
+          }).catch((err) => {
+            console.error('Error fetching requests FROM user:', err);
+            return { data: [] };
+          }),
+          axios.get(`${API_URL}/payment-requests`, {
+            params: { recipient_user_id: userId },
+            timeout: 10000
+          }).catch((err) => {
+            console.error('Error fetching requests TO user:', err);
+            return { data: [] };
+          })
+        ]);
+        
+        console.log('Requests FROM user:', fromUser.data?.length || 0, fromUser.data);
+        console.log('Requests TO user:', toUser.data?.length || 0, toUser.data);
+        
+        // Combine and deduplicate by ID
+        const allRequests = [...(fromUser.data || []), ...(toUser.data || [])];
+        const uniqueRequests = Array.from(
+          new Map(allRequests.map((r: PaymentRequest) => [r.id, r])).values()
+        );
+        
         // Sort: open requests first, then paid (most recent first within each group)
-        const allRequests = response.data.sort((a: PaymentRequest, b: PaymentRequest) => {
-          // Open requests first (status === 'open')
+        const sortedRequests = uniqueRequests.sort((a: PaymentRequest, b: PaymentRequest) => {
           if (a.status === 'open' && b.status !== 'open') return -1;
           if (a.status !== 'open' && b.status === 'open') return 1;
-          // Then by created_at (newest first)
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         });
         
-        console.log('Sorted payment requests:', allRequests);
-        setPaymentRequests(allRequests);
+        console.log('Combined payment requests (total):', sortedRequests.length, sortedRequests);
+        setPaymentRequests(sortedRequests);
+        setLoading(false); // Set loading to false immediately after setting data
       } else {
-        // No data from API, show empty state (DO NOT use mock data)
-        console.log('No data from API');
-        setPaymentRequests([]);
+        // No user ID - fetch all (shouldn't happen if authenticated)
+        console.log('No user ID, fetching all payment requests');
+        const response = await axios.get(`${API_URL}/payment-requests`, {
+          timeout: 5000
+        });
+        
+        if (response.data && response.data.length > 0) {
+          const sortedRequests = response.data.sort((a: PaymentRequest, b: PaymentRequest) => {
+            if (a.status === 'open' && b.status !== 'open') return -1;
+            if (a.status !== 'open' && b.status === 'open') return 1;
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          });
+          setPaymentRequests(sortedRequests);
+        } else {
+          setPaymentRequests([]);
+        }
+        setLoading(false); // Set loading to false after setting data
       }
     } catch (error: any) {
       console.error('Error fetching payment requests:', error);
@@ -105,47 +156,75 @@ export default function Feed() {
       // DO NOT add: setPaymentRequests(mockPaymentRequests) or similar
       console.log('API failed, showing empty state');
       setPaymentRequests([]);
+      setLoading(false); // Always set loading to false on error
     } finally {
+      // Ensure loading is always set to false and ref is cleared
       setLoading(false);
+      fetchingRef.current = false;
     }
   }, []);
 
   // CRITICAL: Authentication check - DO NOT remove this
   useEffect(() => {
+    let mounted = true;
+    
     // Check authentication - REQUIRED for this page
     const checkAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          router.push('/login');
+          if (mounted) {
+            router.push('/login');
+          }
           return;
         }
-        setUser(session.user);
-        fetchPaymentRequests();
+        if (mounted) {
+          setUser(session.user);
+          // Fetch payment requests after auth is confirmed
+          fetchPaymentRequests();
+        }
       } catch (error) {
         console.error('Error checking auth:', error);
-        router.push('/login');
+        if (mounted) {
+          router.push('/login');
+        }
       } finally {
-        setCheckingAuth(false);
+        if (mounted) {
+          setCheckingAuth(false);
+        }
       }
     };
 
     checkAuth();
 
     // Listen for auth changes - REQUIRED - DO NOT remove
+    // Only refetch if session actually changes (not on every event)
+    let lastUserId: string | null = null;
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      
       if (!session) {
-        router.push('/login');
+        if (lastUserId !== null) {
+          // Only redirect if we had a session before
+          router.push('/login');
+        }
+        lastUserId = null;
       } else {
-        setUser(session.user);
-        fetchPaymentRequests();
+        const currentUserId = session.user.id;
+        // Only refetch if user ID actually changed
+        if (lastUserId !== currentUserId) {
+          setUser(session.user);
+          fetchPaymentRequests();
+          lastUserId = currentUserId;
+        }
       }
     });
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
-  }, [router, fetchPaymentRequests]);
+  }, [router, fetchPaymentRequests]); // Include fetchPaymentRequests to ensure it's available
 
 
   if (checkingAuth) {

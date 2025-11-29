@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { useAccount } from 'wagmi';
 import toast from 'react-hot-toast';
+import { supabase } from '@/lib/supabase';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -25,7 +26,36 @@ export default function CreatePaymentRequestComposer({ onSuccess }: CreatePaymen
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'form' | 'creating' | 'success'>('form');
   const [charCount, setCharCount] = useState(0);
+  const [userId, setUserId] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Get authenticated user ID
+  useEffect(() => {
+    const getUserId = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          setUserId(session.user.id);
+        }
+      } catch (error) {
+        console.error('Error getting user ID:', error);
+      }
+    };
+    getUserId();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUserId(session.user.id);
+      } else {
+        setUserId(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const adjustTextareaHeight = () => {
     if (textareaRef.current) {
@@ -81,6 +111,7 @@ export default function CreatePaymentRequestComposer({ onSuccess }: CreatePaymen
 
       const response = await axios.post(`${API_URL}/payment-requests`, {
         requesterAddress: address,
+        requesterUserId: userId, // Authenticated user ID from Supabase
         amount: formData.amount,
         tokenSymbol: 'USDC',
         tokenAddress: BASE_USDC_ADDRESS,

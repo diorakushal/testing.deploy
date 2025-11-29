@@ -205,6 +205,125 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
+// Search users by username (for autocomplete)
+app.get('/api/users/search', async (req, res) => {
+  try {
+    const { q } = req.query; // Search query (username only)
+    
+    if (!q || q.length < 1) {
+      return res.json([]);
+    }
+    
+    // Remove @ if user typed it and clean the search term
+    const cleanSearch = q.trim().replace(/^@+/, '').toLowerCase();
+    
+    if (!cleanSearch || cleanSearch.length < 1) {
+      return res.json([]);
+    }
+    
+    console.log('Searching for users by username:', cleanSearch);
+    
+    // Use Supabase client for this query (more reliable for Supabase)
+    const { supabase } = require('./lib/supabase');
+    
+    console.log('Searching with pattern:', `%${cleanSearch}%`);
+    
+    // Use Supabase client with ilike for case-insensitive search
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, username, email, first_name, last_name')
+      .not('username', 'is', null)
+      .neq('username', '')
+      .ilike('username', `%${cleanSearch}%`)
+      .limit(10);
+    
+    console.log('Search results count:', data?.length || 0);
+    if (error) {
+      console.error('Supabase search error:', error);
+      // Fallback to direct query if Supabase fails
+      try {
+        const result = await pool.query(
+          `SELECT id, username, email, first_name, last_name 
+           FROM users 
+           WHERE username IS NOT NULL 
+             AND username != ''
+             AND LOWER(username) LIKE $1
+           ORDER BY username ASC 
+           LIMIT 10`,
+          [`%${cleanSearch}%`]
+        );
+        console.log('Fallback query results:', result.rows.length);
+        const results = (result.rows || []).map(user => ({
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          displayName: user.first_name && user.last_name 
+            ? `${user.first_name} ${user.last_name}` 
+            : user.first_name || user.email?.split('@')[0] || 'User',
+          searchText: user.username ? `@${user.username}` : user.email
+        }));
+        return res.json(results);
+      } catch (fallbackError) {
+        console.error('Fallback query also failed:', fallbackError);
+        return res.json([]);
+      }
+    }
+    
+    if (data && data.length > 0) {
+      console.log('Found users:', data.map(u => u.username));
+    } else {
+      console.log('No users found matching:', cleanSearch);
+    }
+    
+    // Use data from Supabase query
+    const resultRows = data || [];
+    
+    // Format results for autocomplete
+    const results = (resultRows || []).map(user => ({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      displayName: user.first_name && user.last_name 
+        ? `${user.first_name} ${user.last_name}` 
+        : user.first_name || user.email?.split('@')[0] || 'User',
+      searchText: user.username ? `@${user.username}` : user.email
+    }));
+    
+    res.json(results);
+  } catch (error) {
+    console.error('Error searching users:', error);
+    // Return empty array instead of error to prevent frontend issues
+    res.json([]);
+  }
+});
+
+// Debug endpoint: Get all users with usernames (for testing)
+app.get('/api/users/debug/all', async (req, res) => {
+  try {
+    const { supabase } = require('./lib/supabase');
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, username, email, first_name, last_name')
+      .not('username', 'is', null)
+      .neq('username', '')
+      .limit(20);
+    
+    if (error) {
+      console.error('Error fetching users:', error);
+      return res.json({ error: error.message, users: [] });
+    }
+    
+    res.json({ count: data?.length || 0, users: data || [] });
+  } catch (error) {
+    console.error('Error in debug endpoint:', error);
+    res.json({ error: error.message, users: [] });
+  }
+});
+
 // Get user profile
 app.get('/api/users/:address', async (req, res) => {
   try {
@@ -744,6 +863,8 @@ app.get('/api/payment-requests', async (req, res) => {
     
     const status = getQueryParam('status');
     const requester_address = getQueryParam('requester_address');
+    const requester_user_id = getQueryParam('requester_user_id'); // Filter by authenticated user ID (requests FROM user)
+    const recipient_user_id = getQueryParam('recipient_user_id'); // Filter by recipient user ID (requests TO user)
     
     // Use Supabase client instead of direct PostgreSQL
     const { supabase } = require('./lib/supabase');
@@ -759,8 +880,22 @@ app.get('/api/payment-requests', async (req, res) => {
       query = query.eq('status', status);
     }
     
-    if (requester_address && typeof requester_address === 'string') {
+    // Filter by requester_user_id if provided (for authenticated users - requests FROM user)
+    if (requester_user_id && typeof requester_user_id === 'string') {
+      query = query.eq('requester_user_id', requester_user_id);
+    } else if (requester_address && typeof requester_address === 'string') {
+      // Fallback to wallet address filtering if user_id not provided
       query = query.eq('requester_address', requester_address);
+    }
+    
+    // Filter by recipient_user_id if provided (requests TO user)
+    if (recipient_user_id && typeof recipient_user_id === 'string') {
+      query = query.eq('recipient_user_id', recipient_user_id);
+    }
+    
+    // Filter by recipient_user_id if provided (requests TO user)
+    if (recipient_user_id && typeof recipient_user_id === 'string') {
+      query = query.eq('recipient_user_id', recipient_user_id);
     }
     
     const { data, error } = await query;
@@ -774,27 +909,81 @@ app.get('/api/payment-requests', async (req, res) => {
       throw error;
     }
     
-    // Fetch usernames for all unique requester addresses
+    // Fetch usernames for all unique requester user IDs (preferred) or addresses (fallback)
     if (data && data.length > 0) {
+      const uniqueUserIds = [...new Set(data.map(r => r.requester_user_id).filter(Boolean))];
       const uniqueAddresses = [...new Set(data.map(r => r.requester_address))];
       
-      // Fetch usernames from users table
-      const { data: users, error: usersError } = await supabase
-        .from('users')
-        .select('wallet_address, username')
-        .in('wallet_address', uniqueAddresses);
-      
-      if (!usersError && users) {
-        // Create a map of address -> username
-        const usernameMap = {};
-        users.forEach(user => {
-          usernameMap[user.wallet_address?.toLowerCase()] = user.username;
-        });
+      // Fetch usernames from users table using user IDs (preferred)
+      if (uniqueUserIds.length > 0) {
+        const { data: users, error: usersError } = await supabase
+          .from('users')
+          .select('id, username')
+          .in('id', uniqueUserIds);
         
-        // Add username to each payment request
-        data.forEach(request => {
-          request.requester_username = usernameMap[request.requester_address?.toLowerCase()] || null;
-        });
+        if (!usersError && users) {
+          // Create a map of user_id -> username
+          const usernameMap = {};
+          users.forEach(user => {
+            usernameMap[user.id] = user.username;
+          });
+          
+          // Add username to each payment request
+          data.forEach(request => {
+            if (request.requester_user_id && usernameMap[request.requester_user_id]) {
+              request.requester_username = usernameMap[request.requester_user_id];
+            }
+          });
+        }
+      }
+      
+      // Fallback: fetch usernames by wallet address for requests without user_id
+      const requestsWithoutUsername = data.filter(r => !r.requester_username);
+      if (requestsWithoutUsername.length > 0) {
+        const addressesToFetch = [...new Set(requestsWithoutUsername.map(r => r.requester_address))];
+        const { data: usersByAddress, error: usersError } = await supabase
+          .from('users')
+          .select('wallet_address, username')
+          .in('wallet_address', addressesToFetch);
+        
+        if (!usersError && usersByAddress) {
+          // Create a map of address -> username
+          const addressUsernameMap = {};
+          usersByAddress.forEach(user => {
+            addressUsernameMap[user.wallet_address?.toLowerCase()] = user.username;
+          });
+          
+          // Add username to payment requests that don't have one yet
+          data.forEach(request => {
+            if (!request.requester_username && addressUsernameMap[request.requester_address?.toLowerCase()]) {
+              request.requester_username = addressUsernameMap[request.requester_address?.toLowerCase()];
+            }
+          });
+        }
+      }
+      
+      // Fetch usernames for payers (paid_by field)
+      const paidByAddresses = [...new Set(data.map(r => r.paid_by).filter(Boolean))];
+      if (paidByAddresses.length > 0) {
+        const { data: payers, error: payersError } = await supabase
+          .from('users')
+          .select('wallet_address, username')
+          .in('wallet_address', paidByAddresses);
+        
+        if (!payersError && payers) {
+          // Create a map of address -> username for payers
+          const payerUsernameMap = {};
+          payers.forEach(user => {
+            payerUsernameMap[user.wallet_address?.toLowerCase()] = user.username;
+          });
+          
+          // Add payer username to each payment request
+          data.forEach(request => {
+            if (request.paid_by && payerUsernameMap[request.paid_by?.toLowerCase()]) {
+              request.paid_by_username = payerUsernameMap[request.paid_by?.toLowerCase()];
+            }
+          });
+        }
       }
     }
     
@@ -840,18 +1029,34 @@ app.get('/api/payment-requests/:id', async (req, res) => {
       paidBy: data?.paid_by
     });
     
-    // Fetch username for requester
-    if (data && data.requester_address) {
-      const { data: user, error: userError } = await supabase
-        .from('users')
-        .select('username')
-        .eq('wallet_address', data.requester_address)
-        .maybeSingle();
+    // Fetch username for requester (prefer user_id, fallback to wallet_address)
+    if (data) {
+      if (data.requester_user_id) {
+        // Fetch by user ID (preferred)
+        const { data: user, error: userError } = await supabase
+          .from('users')
+          .select('username')
+          .eq('id', data.requester_user_id)
+          .maybeSingle();
+        
+        if (!userError && user) {
+          data.requester_username = user.username;
+        }
+      }
       
-      if (!userError && user) {
-        data.requester_username = user.username;
-      } else {
-        data.requester_username = null;
+      // Fallback to wallet address if no username found yet
+      if (!data.requester_username && data.requester_address) {
+        const { data: userByAddress, error: userError } = await supabase
+          .from('users')
+          .select('username')
+          .eq('wallet_address', data.requester_address)
+          .maybeSingle();
+        
+        if (!userError && userByAddress) {
+          data.requester_username = userByAddress.username;
+        } else {
+          data.requester_username = null;
+        }
       }
     }
     
@@ -871,6 +1076,8 @@ app.post('/api/payment-requests', async (req, res) => {
   try {
     const {
       requesterAddress,
+      requesterUserId, // Authenticated user ID from Supabase auth
+      recipientUserId, // User ID of the recipient (if request is sent to specific user)
       amount,
       tokenSymbol = 'USDC',
       tokenAddress,
@@ -891,18 +1098,30 @@ app.post('/api/payment-requests', async (req, res) => {
     // Use Supabase client instead of direct PostgreSQL for better reliability
     const { supabase } = require('./lib/supabase');
     
+    const insertData = {
+      requester_address: requesterAddress,
+      amount: parseFloat(amount),
+      token_symbol: tokenSymbol,
+      token_address: tokenAddress,
+      chain_id: chainId.toString(),
+      chain_name: chainName,
+      caption: caption || null,
+      status: 'open'
+    };
+    
+    // Add requester_user_id if provided (for authenticated users)
+    if (requesterUserId) {
+      insertData.requester_user_id = requesterUserId;
+    }
+    
+    // Add recipient_user_id if provided (for requests sent to specific users)
+    if (recipientUserId) {
+      insertData.recipient_user_id = recipientUserId;
+    }
+    
     const { data, error } = await supabase
       .from('payment_requests')
-      .insert({
-        requester_address: requesterAddress,
-        amount: parseFloat(amount),
-        token_symbol: tokenSymbol,
-        token_address: tokenAddress,
-        chain_id: chainId.toString(),
-        chain_name: chainName,
-        caption: caption || null,
-        status: 'open'
-      })
+      .insert(insertData)
       .select()
       .single();
     
@@ -1222,6 +1441,175 @@ app.patch('/api/payment-requests/:id/cancel', async (req, res) => {
     res.json({ message: 'Payment request deleted successfully' });
   } catch (error) {
     console.error('Error deleting payment request:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== ESCROW PAYMENT ENDPOINTS ==========
+
+// Create escrow payment
+app.post('/api/escrow-payments', async (req, res) => {
+  try {
+    const {
+      onchainId,
+      senderAddress,
+      recipientAddress,
+      chainId,
+      tokenAddress,
+      tokenSymbol = 'USDC',
+      amount,
+      expiry,
+      txHashCreate
+    } = req.body;
+
+    // Validate required fields
+    if (!onchainId || !senderAddress || !recipientAddress || !chainId || !tokenAddress || !amount || !txHashCreate) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    if (parseFloat(amount) <= 0) {
+      return res.status(400).json({ error: 'Amount must be greater than 0' });
+    }
+
+    const { supabase } = require('./lib/supabase');
+
+    const { data, error } = await supabase
+      .from('escrow_payments')
+      .insert({
+        onchain_id: parseInt(onchainId),
+        sender_address: senderAddress,
+        recipient_address: recipientAddress,
+        chain_id: parseInt(chainId),
+        token_address: tokenAddress,
+        token_symbol: tokenSymbol,
+        amount: parseFloat(amount),
+        expiry: expiry ? new Date(expiry * 1000).toISOString() : null,
+        status: 'pending',
+        tx_hash_create: txHashCreate
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating escrow payment:', error);
+      throw error;
+    }
+
+    res.json(data);
+  } catch (error) {
+    console.error('Error creating escrow payment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get escrow payment by ID
+app.get('/api/escrow-payments/:id', async (req, res) => {
+  try {
+    const paymentId = req.params.id;
+    const { supabase } = require('./lib/supabase');
+
+    const { data, error } = await supabase
+      .from('escrow_payments')
+      .select('*')
+      .eq('id', paymentId)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return res.status(404).json({ error: 'Escrow payment not found' });
+      }
+      throw error;
+    }
+
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching escrow payment:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get escrow payments (with filters)
+app.get('/api/escrow-payments', async (req, res) => {
+  try {
+    const { senderAddress, recipientAddress, status, chainId } = req.query;
+    const { supabase } = require('./lib/supabase');
+
+    let query = supabase.from('escrow_payments').select('*');
+
+    if (senderAddress) {
+      query = query.eq('sender_address', senderAddress);
+    }
+    if (recipientAddress) {
+      query = query.eq('recipient_address', recipientAddress);
+    }
+    if (status) {
+      query = query.eq('status', status);
+    }
+    if (chainId) {
+      query = query.eq('chain_id', parseInt(chainId));
+    }
+
+    query = query.order('created_at', { ascending: false });
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    res.json(data || []);
+  } catch (error) {
+    console.error('Error fetching escrow payments:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Sync escrow payment status (after claim or cancel)
+app.post('/api/escrow-payments/:id/sync', async (req, res) => {
+  try {
+    const paymentId = req.params.id;
+    const { txHashClaim, txHashCancel } = req.body;
+    const { supabase } = require('./lib/supabase');
+
+    // First, get the current payment
+    const { data: payment, error: fetchError } = await supabase
+      .from('escrow_payments')
+      .select('*')
+      .eq('id', paymentId)
+      .single();
+
+    if (fetchError || !payment) {
+      return res.status(404).json({ error: 'Escrow payment not found' });
+    }
+
+    const updateData = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (txHashClaim) {
+      updateData.status = 'claimed';
+      updateData.tx_hash_claim = txHashClaim;
+      updateData.claimed_at = new Date().toISOString();
+    } else if (txHashCancel) {
+      updateData.status = 'cancelled';
+      updateData.tx_hash_cancel = txHashCancel;
+      updateData.cancelled_at = new Date().toISOString();
+    }
+
+    const { data: updatedPayment, error: updateError } = await supabase
+      .from('escrow_payments')
+      .update(updateData)
+      .eq('id', paymentId)
+      .select()
+      .single();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    res.json(updatedPayment);
+  } catch (error) {
+    console.error('Error syncing escrow payment:', error);
     res.status(500).json({ error: error.message });
   }
 });
