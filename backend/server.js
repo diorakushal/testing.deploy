@@ -62,10 +62,27 @@ const ABI = require('./contracts/KOI.json');
 
 // ========== API ROUTES ==========
 
+// Helper function to safely extract and validate query parameters
+// Prevents issues when multiple query params with same name are passed (Express returns arrays)
+const getQueryParam = (query, paramName, defaultValue = undefined) => {
+  const value = query[paramName];
+  if (value === undefined || value === null) {
+    return defaultValue;
+  }
+  // If multiple values provided, use the first one
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+  // Ensure it's a string before returning
+  return typeof value === 'string' ? value : String(value);
+};
+
 // Get markets feed
 app.get('/api/markets', async (req, res) => {
   try {
-    const { sort = 'trending', category, status = 'active' } = req.query;
+    const sort = getQueryParam(req.query, 'sort', 'trending');
+    const category = getQueryParam(req.query, 'category');
+    const status = getQueryParam(req.query, 'status', 'active');
     
     let query = `
       SELECT * FROM markets 
@@ -73,7 +90,7 @@ app.get('/api/markets', async (req, res) => {
     `;
     const params = [status === 'resolved'];
     
-    if (category) {
+    if (category && typeof category === 'string') {
       query += ' AND category = $2';
       params.push(category);
     }
@@ -714,7 +731,19 @@ app.post('/api/markets/:marketId/distribute-winnings', async (req, res) => {
 // Get all payment requests
 app.get('/api/payment-requests', async (req, res) => {
   try {
-    const { status, requester_address } = req.query;
+    // Validate and normalize query parameters to prevent array issues
+    // Express may pass arrays if multiple query params with same name are provided
+    const getQueryParam = (param) => {
+      const value = req.query[param];
+      if (Array.isArray(value)) {
+        // If multiple values provided, use the first one
+        return value[0];
+      }
+      return value;
+    };
+    
+    const status = getQueryParam('status');
+    const requester_address = getQueryParam('requester_address');
     
     // Use Supabase client instead of direct PostgreSQL
     const { supabase } = require('./lib/supabase');
@@ -726,11 +755,11 @@ app.get('/api/payment-requests', async (req, res) => {
       .order('created_at', { ascending: false })
       .limit(50);
     
-    if (status) {
+    if (status && typeof status === 'string') {
       query = query.eq('status', status);
     }
     
-    if (requester_address) {
+    if (requester_address && typeof requester_address === 'string') {
       query = query.eq('requester_address', requester_address);
     }
     

@@ -22,7 +22,7 @@ export default function LoginPage() {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        router.push('/feed');
+        router.replace('/feed');
       }
     };
     checkSession();
@@ -89,7 +89,7 @@ export default function LoginPage() {
         
         // Redirect to feed page
         setTimeout(() => {
-          router.push('/feed');
+          router.replace('/feed');
         }, 500);
       }
     } catch (error: any) {

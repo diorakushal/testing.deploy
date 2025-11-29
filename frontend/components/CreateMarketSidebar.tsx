@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
-import { useAccount } from 'wagmi';
+import { useAccount, useChainId, useSwitchChain } from 'wagmi';
 import toast from 'react-hot-toast';
 import { AVAILABLE_CHAINS, getTokensForChain, getToken, getChainConfig, type TokenConfig } from '@/lib/tokenConfig';
 
@@ -14,10 +14,15 @@ interface CreateMarketSidebarProps {
 
 export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarProps) {
   const { address, isConnected } = useAccount();
+  const chainId = useChainId(); // Get current chain from header
+  const { switchChain } = useSwitchChain(); // To switch chain in header
+  
+  // Initialize with current chain from header, fallback to Base if not connected
   const [formData, setFormData] = useState({
     amount: '',
+    to: '', // Recipient field
     caption: '',
-    chainId: 8453 as number | string, // Default to Base
+    chainId: (chainId || 8453) as number | string, // Use current chain from header, default to Base
     tokenSymbol: 'USDC', // Default token
   });
   const [loading, setLoading] = useState(false);
@@ -25,42 +30,48 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
   const [charCount, setCharCount] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Update formData when chain changes in header
+  useEffect(() => {
+    if (chainId) {
+      setFormData(prev => {
+        // Only update if chain actually changed
+        if (prev.chainId !== chainId) {
+          const allChainTokens = getTokensForChain(chainId);
+          const stablecoins = allChainTokens.filter(token => token.symbol === 'USDC' || token.symbol === 'USDT');
+          const defaultToken = stablecoins.find(t => t.symbol === prev.tokenSymbol)?.symbol || stablecoins[0]?.symbol || 'USDC';
+          
+          return {
+            ...prev,
+            chainId: chainId as number | string,
+            tokenSymbol: defaultToken
+          };
+        }
+        return prev;
+      });
+    }
+  }, [chainId]);
+
   // Get available tokens for selected chain - filter to only stablecoins (USDC, USDT)
   const allTokens = getTokensForChain(formData.chainId);
   const availableTokens = allTokens.filter(token => token.symbol === 'USDC' || token.symbol === 'USDT');
   const selectedToken = getToken(formData.tokenSymbol, formData.chainId);
   const selectedChain = getChainConfig(formData.chainId);
 
-  const adjustTextareaHeight = () => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
-    }
-  };
-
   const handleCaptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     if (value.length <= 300) {
       setFormData({ ...formData, caption: value });
       setCharCount(value.length);
-      adjustTextareaHeight();
     } else {
       const truncated = value.slice(0, 300);
       setFormData({ ...formData, caption: truncated });
       setCharCount(300);
-      adjustTextareaHeight();
     }
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    setTimeout(() => {
-      adjustTextareaHeight();
-    }, 0);
+    // No need to adjust height - keeping fixed size
   };
-
-  useEffect(() => {
-    adjustTextareaHeight();
-  }, [formData.caption]);
 
   const validateForm = () => {
     if (!formData.amount || parseFloat(formData.amount) <= 0) {
@@ -148,7 +159,7 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
       
       // Reset form after a delay
       setTimeout(() => {
-        setFormData({ amount: '', caption: '', chainId: 8453 as number | string, tokenSymbol: 'USDC' });
+        setFormData({ amount: '', to: '', caption: '', chainId: (chainId || 8453) as number | string, tokenSymbol: 'USDC' });
         setCharCount(0);
         setStep('form');
         onSuccess();
@@ -164,7 +175,49 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
 
   return (
     <div className="p-4 flex flex-col items-center">
-      <h3 className="text-lg font-bold text-black tracking-tight mb-5 pb-3 border-b border-gray-200 text-center w-full">Request crypto</h3>
+      {/* Header with chain selector */}
+      <div className="flex items-center justify-center gap-2 mb-5 pb-3 border-b border-gray-200 w-full">
+        <h3 className="text-lg font-bold text-black tracking-tight">Request crypto</h3>
+        <div className="relative">
+          <select
+            value={formData.chainId}
+            onChange={(e) => {
+              const newChainId = e.target.value === 'solana' ? 'solana' : parseInt(e.target.value);
+              const allChainTokens = getTokensForChain(newChainId);
+              const stablecoins = allChainTokens.filter(token => token.symbol === 'USDC' || token.symbol === 'USDT');
+              const defaultToken = stablecoins.find(t => t.symbol === formData.tokenSymbol)?.symbol || stablecoins[0]?.symbol || 'USDC';
+              
+              // Update form data
+              setFormData({ 
+                ...formData, 
+                chainId: newChainId,
+                tokenSymbol: defaultToken
+              });
+              
+              // Also switch chain in header if it's an EVM chain and wallet is connected
+              if (isConnected && typeof newChainId === 'number' && switchChain && newChainId !== chainId) {
+                try {
+                  switchChain({ chainId: newChainId as any });
+                } catch (error) {
+                  console.error('Error switching chain:', error);
+                  // Don't show error toast here as the form chain can still be different from header chain
+                }
+              }
+            }}
+            className="appearance-none px-3 py-1.5 pr-8 rounded-full border border-gray-300 bg-transparent text-sm font-semibold focus:outline-none focus:border-black transition-colors cursor-pointer text-gray-700"
+            disabled={loading}
+          >
+            {AVAILABLE_CHAINS.map(chain => (
+              <option key={chain.id} value={chain.id}>
+                {chain.name}
+              </option>
+            ))}
+          </select>
+          <svg className="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+          </svg>
+        </div>
+      </div>
       
       {step === 'success' ? (
         <div className="text-center py-4">
@@ -222,54 +275,38 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
                 </svg>
               </div>
             </div>
-            {/* Chain Selector */}
-            <div className="mt-2 w-full">
-              <div className="relative">
-                <select
-                  value={formData.chainId}
-                  onChange={(e) => {
-                    const newChainId = e.target.value === 'solana' ? 'solana' : parseInt(e.target.value);
-                    const allChainTokens = getTokensForChain(newChainId);
-                    const stablecoins = allChainTokens.filter(token => token.symbol === 'USDC' || token.symbol === 'USDT');
-                    const defaultToken = stablecoins.find(t => t.symbol === formData.tokenSymbol)?.symbol || stablecoins[0]?.symbol || 'USDC';
-                    setFormData({ 
-                      ...formData, 
-                      chainId: newChainId,
-                      tokenSymbol: defaultToken
-                    });
-                  }}
-                  className="w-full appearance-none px-3 py-2 pr-8 rounded-full border border-gray-300 bg-transparent text-sm focus:outline-none focus:border-black transition-colors cursor-pointer text-gray-700"
-                  disabled={loading}
-                >
-                  {AVAILABLE_CHAINS.map(chain => (
-                    <option key={chain.id} value={chain.id}>
-                      {chain.name}
-                    </option>
-                  ))}
-                </select>
-                <svg className="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
-                </svg>
-              </div>
-            </div>
           </div>
 
-          {/* Main Text Area - Caption */}
-          <div className="relative pb-8 w-full">
+          {/* To Field */}
+          <div className="mb-4 w-full">
+            <label className="block text-sm font-medium text-gray-700 mb-2">To</label>
+            <input
+              type="text"
+              value={formData.to}
+              onChange={(e) => setFormData({ ...formData, to: e.target.value })}
+              className="w-full px-4 py-2 rounded-full border border-gray-300 bg-white placeholder-gray-400 text-base focus:outline-none focus:border-black transition-colors text-black"
+              placeholder="search by name, @username, email"
+              disabled={loading}
+            />
+          </div>
+
+          {/* For Field - Caption */}
+          <div className="relative mb-4 w-full">
+            <label className="block text-sm font-medium text-gray-700 mb-2">For</label>
             <textarea
               ref={textareaRef}
               value={formData.caption}
               onChange={handleCaptionChange}
               onPaste={handlePaste}
-              className="w-full px-0 py-3 border-0 border-b border-gray-200 bg-transparent placeholder-gray-400 text-base focus:outline-none focus:border-gray-400 transition-colors resize-none overflow-hidden"
-              placeholder="What's this for? (optional)"
+              className="w-full px-4 py-2 rounded-full border border-gray-300 bg-white placeholder-gray-400 text-base focus:outline-none focus:border-black transition-colors resize-none overflow-hidden text-black"
+              placeholder="Add note"
               disabled={loading}
-              rows={4}
-              style={{ minHeight: '100px' }}
+              rows={1}
+              style={{ height: '40px' }}
             />
             {/* Character counter - Circular progress ring */}
             {formData.caption && (
-              <div className="absolute bottom-3 right-0 flex items-center gap-2">
+              <div className="absolute bottom-2 right-4 flex items-center gap-2">
                 <span
                   className="inline-block w-5 h-5 rounded-full relative flex-shrink-0"
                   style={{
@@ -297,11 +334,11 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
           {/* Bottom Section - Info, Button */}
           <div className="pt-3 space-y-3">
             {/* Info - Subtle */}
-            <div className="flex items-center justify-center gap-2 text-xs text-gray-500 text-center">
+            <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
               <svg className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span>Anyone can click Accept to pay directly to your wallet</span>
+              <span className="whitespace-nowrap">Anyone can click Accept to pay directly to your wallet</span>
             </div>
 
             {/* Submit Button */}

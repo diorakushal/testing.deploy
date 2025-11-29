@@ -178,7 +178,7 @@ export default function Feed() {
         <div className="grid grid-cols-1 lg:grid-cols-[350px_1fr] gap-6">
           {/* Create Sidebar */}
           <div className="hidden lg:block">
-            <div className="sticky top-6 bg-white border border-gray-200 rounded-2xl overflow-hidden">
+            <div className="sticky top-20 z-40 bg-white border border-gray-200 rounded-2xl overflow-hidden">
               <CreateMarketSidebar onSuccess={fetchPaymentRequests} />
             </div>
           </div>
