@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Header from '@/components/Header';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 
@@ -108,22 +109,12 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
-      <main className="flex items-center justify-center px-4 py-8 sm:py-12">
+    <div className="min-h-screen bg-white flex">
+      <Header />
+      
+      <main className="flex-1 flex items-center justify-center px-4 py-12 sm:py-16">
         <div className="w-full max-w-md">
-          <div className="bg-white p-8 sm:p-10">
-            {/* Logo */}
-            <div className="mb-6 bg-white">
-              <Link href="/feed" className="inline-block bg-white">
-                <img 
-                  src="/applogo.png" 
-                  alt="Xelli" 
-                  className="w-16 h-16 object-contain bg-white"
-                  style={{ backgroundColor: '#ffffff' }}
-                />
-              </Link>
-            </div>
-            
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 sm:p-10">
             {/* Header */}
             <div className="mb-8">
               <h1 className="text-3xl font-bold text-black mb-2">Log in</h1>
@@ -136,7 +127,7 @@ export default function LoginPage() {
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-5">
               {/* Email */}
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-black mb-2">
@@ -148,18 +139,14 @@ export default function LoginPage() {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400 ${
-                    emailError ? 'border-red-500' : 'border-gray-300'
+                  className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all text-black placeholder-gray-400 ${
+                    emailError ? 'border-red-300' : 'border-gray-300'
                   }`}
                   placeholder="john@example.com"
                   required
                 />
-                {emailError ? (
+                {emailError && (
                   <p className="text-xs text-red-500 mt-1">{emailError}</p>
-                ) : (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Enter your email address
-                  </p>
                 )}
               </div>
 
@@ -175,8 +162,8 @@ export default function LoginPage() {
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
-                    className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400"
-                    placeholder="Password"
+                    className="w-full px-4 py-2.5 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all text-black placeholder-gray-400"
+                    placeholder="••••••••"
                     required
                   />
                   <button
@@ -197,24 +184,10 @@ export default function LoginPage() {
                     )}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Enter your password
-                </p>
-              </div>
-
-              {/* Submit Button */}
-              <div className="pt-6">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full px-4 py-3 bg-gray-200 text-black rounded-full hover:bg-gray-300 active:scale-[0.98] transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Logging in...' : 'Log in'}
-                </button>
               </div>
 
               {/* Forgot Password Link */}
-              <div className="flex justify-center pt-2">
+              <div className="flex justify-end">
                 <Link
                   href="/auth/forgot-password"
                   className="text-sm text-black hover:underline"
@@ -222,14 +195,16 @@ export default function LoginPage() {
                   Forgot password?
                 </Link>
               </div>
-            </form>
 
-            {/* Privacy Link */}
-            <p className="text-xs text-gray-500 text-center mt-8">
-              <Link href="/privacy" className="hover:text-gray-700">
-                Your Privacy Choices
-              </Link>
-            </p>
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 active:scale-[0.98] transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Logging in...' : 'Log in'}
+              </button>
+            </form>
           </div>
         </div>
       </main>

@@ -1,15 +1,16 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { ConnectButton, useConnectModal } from '@rainbow-me/rainbowkit';
-import { useAccount, useBalance, useChainId, useSwitchChain, useDisconnect } from 'wagmi';
+import { useAccount, useBalance, useDisconnect } from 'wagmi';
 import { formatEther } from 'viem';
 import { supabase } from '@/lib/supabase';
-import { getChainConfig } from '@/lib/tokenConfig';
-import { base, mainnet, bsc, polygon } from 'wagmi/chains';
 import toast from 'react-hot-toast';
+import DocumentationModal from '@/components/DocumentationModal';
+import TermsModal from '@/components/TermsModal';
+import SettingsModal from '@/components/SettingsModal';
 
 interface HeaderProps {
   onWalletConnect?: (address: string) => void;
@@ -17,20 +18,20 @@ interface HeaderProps {
 
 export default function Header({ onWalletConnect }: HeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isWalletMenuOpen, setIsWalletMenuOpen] = useState(false);
-  const [isNetworkMenuOpen, setIsNetworkMenuOpen] = useState(false);
+  const [isDocumentationOpen, setIsDocumentationOpen] = useState(false);
+  const [isTermsOpen, setIsTermsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const walletMenuRef = useRef<HTMLDivElement>(null);
-  const networkMenuRef = useRef<HTMLDivElement>(null);
 
   // Use wagmi hooks for wallet connection
   const { address, isConnected, connector } = useAccount();
-  const chainId = useChainId();
-  const { switchChain } = useSwitchChain();
   const { disconnect } = useDisconnect();
   const { openConnectModal } = useConnectModal();
   
@@ -43,13 +44,6 @@ export default function Header({ onWalletConnect }: HeaderProps) {
     },
   });
 
-  const currentChain = getChainConfig(chainId);
-  const availableChains = [
-    { id: 1, name: 'Ethereum', chain: mainnet },
-    { id: 8453, name: 'Base', chain: base },
-    { id: 56, name: 'BNB Chain', chain: bsc },
-    { id: 137, name: 'Polygon', chain: polygon },
-  ];
 
   // Get wallet name from connector
   const getWalletName = () => {
@@ -109,9 +103,6 @@ export default function Header({ onWalletConnect }: HeaderProps) {
       if (walletMenuRef.current && !walletMenuRef.current.contains(event.target as Node)) {
         setIsWalletMenuOpen(false);
       }
-      if (networkMenuRef.current && !networkMenuRef.current.contains(event.target as Node)) {
-        setIsNetworkMenuOpen(false);
-      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -127,18 +118,6 @@ export default function Header({ onWalletConnect }: HeaderProps) {
       } catch (error) {
         console.error('Failed to copy address:', error);
         toast.error('Failed to copy address');
-      }
-    }
-  };
-
-  const handleSwitchChain = (targetChainId: number) => {
-    if (switchChain && targetChainId !== chainId) {
-      try {
-        switchChain({ chainId: targetChainId as any });
-        setIsNetworkMenuOpen(false);
-      } catch (error) {
-        console.error('Error switching chain:', error);
-        toast.error('Failed to switch chain');
       }
     }
   };
@@ -247,6 +226,31 @@ export default function Header({ onWalletConnect }: HeaderProps) {
     };
   }, []);
 
+  const refreshUserProfile = async () => {
+    if (!user?.id) return;
+    
+    try {
+      // Refresh user profile from users table
+      const { data: profile, error } = await supabase
+        .from('users')
+        .select('first_name, last_name, username')
+        .eq('id', user.id)
+        .single();
+      
+      if (!error && profile) {
+        setUserProfile(profile);
+      }
+
+      // Refresh user session to get updated metadata (including gradient preference)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser(session.user);
+      }
+    } catch (error) {
+      console.error('Error refreshing user profile:', error);
+    }
+  };
+
   const handleSignOut = async () => {
     try {
       setIsUserMenuOpen(false);
@@ -282,6 +286,79 @@ export default function Header({ onWalletConnect }: HeaderProps) {
     return name[0]?.toUpperCase() || 'U';
   };
 
+  // 3D sphere gradients with top-left highlight, center-right warm tone, bottom-left shadow
+  const sphereGradients = [
+    // Magenta/pink top-left, orange center-right, grayish-purple bottom-left
+    { 
+      topLeft: '#ec4899',      // Vibrant magenta/pink
+      centerRight: '#f97316',  // Warm orange/gold
+      bottomLeft: '#8b5cf6'   // Muted purple-gray
+    },
+    {
+      topLeft: '#d946ef',      // Fuchsia
+      centerRight: '#fb923c',  // Orange
+      bottomLeft: '#a78bfa'    // Lavender-gray
+    },
+    {
+      topLeft: '#f43f5e',      // Rose
+      centerRight: '#f59e0b',  // Amber
+      bottomLeft: '#9f7aea'    // Purple-gray
+    },
+    {
+      topLeft: '#a855f7',      // Purple
+      centerRight: '#f97316',  // Orange
+      bottomLeft: '#7c3aed'    // Deep purple-gray
+    },
+    {
+      topLeft: '#ec4899',      // Pink
+      centerRight: '#eab308',  // Yellow-gold
+      bottomLeft: '#8b5cf6'    // Purple-gray
+    },
+    {
+      topLeft: '#d946ef',      // Fuchsia
+      centerRight: '#fb923c',  // Orange
+      bottomLeft: '#a78bfa'    // Lavender
+    },
+    {
+      topLeft: '#f43f5e',      // Rose
+      centerRight: '#f97316',  // Orange
+      bottomLeft: '#9f7aea'    // Purple-gray
+    },
+    {
+      topLeft: '#a855f7',      // Purple
+      centerRight: '#f59e0b',  // Amber
+      bottomLeft: '#7c3aed'    // Deep purple
+    },
+    {
+      topLeft: '#ec4899',      // Pink
+      centerRight: '#fb923c',  // Light orange
+      bottomLeft: '#8b5cf6'    // Purple-gray
+    },
+    {
+      topLeft: '#d946ef',      // Fuchsia
+      centerRight: '#eab308',  // Yellow
+      bottomLeft: '#a78bfa'    // Lavender
+    },
+  ];
+
+  // Generate unique 3D sphere gradient for each user based on their ID or saved preference
+  const getUserGradient = (userId: string, userMetadata?: any) => {
+    // Check if user has a saved gradient preference
+    const savedGradient = userMetadata?.gradient_preference;
+    if (savedGradient !== undefined && savedGradient >= 0 && savedGradient < sphereGradients.length) {
+      return sphereGradients[savedGradient];
+    }
+    
+    // Default: Use the user ID to generate consistent colors
+    let hash = 0;
+    for (let i = 0; i < userId.length; i++) {
+      hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    
+    const gradientIndex = Math.abs(hash) % sphereGradients.length;
+    return sphereGradients[gradientIndex];
+  };
+
   return (
     <>
       <header className="bg-white z-50 sticky top-0 border-b border-gray-200">
@@ -299,82 +376,67 @@ export default function Header({ onWalletConnect }: HeaderProps) {
               </Link>
             </div>
 
+            {/* Navigation Tabs */}
+            {loading ? null : user ? (
+              <div className="flex items-center gap-1 ml-6">
+                {/* Activity Tab */}
+                <Link
+                  href="/feed"
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                    pathname === '/feed' || pathname === '/'
+                      ? 'bg-gray-100 text-black font-medium'
+                      : 'text-gray-600 hover:text-black hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="text-sm">Activity</span>
+                </Link>
+
+                {/* Pay & Request Tab */}
+                <Link
+                  href="/pay-request"
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                    pathname === '/pay-request' || pathname?.includes('/payment-request') || pathname?.includes('/market')
+                      ? 'bg-gray-100 text-black font-medium'
+                      : 'text-gray-600 hover:text-black hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="text-sm">Pay & Request</span>
+                </Link>
+              </div>
+            ) : null}
+
             {/* Right Side Actions */}
             {loading ? null : user ? (
               <div className="flex items-center gap-3 flex-shrink-0 ml-auto">
-                {/* Network Selector */}
-                {isConnected && (
-                  <div className="relative" ref={networkMenuRef}>
-                    <button
-                      onClick={() => {
-                        setIsNetworkMenuOpen(!isNetworkMenuOpen);
-                        setIsWalletMenuOpen(false);
-                        setIsUserMenuOpen(false);
-                      }}
-                      className="flex items-center gap-2 px-3 py-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors border border-gray-200"
-                    >
-                      {/* Chain Icon */}
-                      <div className="w-5 h-5 rounded-full bg-gray-800 flex items-center justify-center">
-                        <div className="w-3 h-3 rounded-full bg-white"></div>
-                      </div>
-                      <span className="text-sm font-medium text-gray-700">
-                        {currentChain?.name || 'Ethereum'}
-                      </span>
-                      <svg 
-                        className={`w-4 h-4 text-gray-400 transition-transform ${isNetworkMenuOpen ? 'rotate-180' : ''}`}
-                        fill="none" 
-                        viewBox="0 0 24 24" 
-                        stroke="currentColor"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
-
-                    {/* Network Dropdown */}
-                    {isNetworkMenuOpen && (
-                      <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-30">
-                        {availableChains.map((chain) => (
-                          <button
-                            key={chain.id}
-                            onClick={() => handleSwitchChain(chain.id)}
-                            className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors ${
-                              chainId === chain.id ? 'bg-gray-50 font-medium' : 'text-gray-700'
-                            }`}
-                          >
-                            {chain.name}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
                 {/* Wallet Connection */}
                 {isConnected && address ? (
                   <div className="relative" ref={walletMenuRef}>
                     <button
                       onClick={() => {
                         setIsWalletMenuOpen(!isWalletMenuOpen);
-                        setIsNetworkMenuOpen(false);
                         setIsUserMenuOpen(false);
                       }}
-                      className="flex items-center gap-2 px-3 py-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors border border-gray-200"
+                      className={`flex items-center gap-2 px-3 py-2 rounded-full transition-all h-10 border border-black ${
+                        isWalletMenuOpen
+                          ? 'bg-white text-black shadow-sm'
+                          : 'bg-white text-gray-600 hover:text-gray-800'
+                      }`}
                     >
                       <div className="text-left">
-                        <div className="text-sm font-semibold text-gray-900">
+                        <div className="text-sm font-semibold leading-tight">
                           {walletName}
                         </div>
-                        <div className="text-xs text-gray-600 font-mono">
+                        <div className="text-xs font-mono leading-tight">
                           {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : ''}
                         </div>
                       </div>
                       {balance && (
-                        <div className="text-xs text-gray-600 ml-2">
+                        <div className="text-xs ml-2 whitespace-nowrap">
                           {parseFloat(formatEther(balance.value)).toFixed(4)} {balance.symbol}
                         </div>
                       )}
                       <svg 
-                        className={`w-4 h-4 text-gray-400 transition-transform ${isWalletMenuOpen ? 'rotate-180' : ''}`}
+                        className={`w-4 h-4 transition-transform flex-shrink-0 ${isWalletMenuOpen ? 'rotate-180' : ''}`}
                         fill="none" 
                         viewBox="0 0 24 24" 
                         stroke="currentColor"
@@ -386,8 +448,8 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                     {/* Wallet Dropdown */}
                     {isWalletMenuOpen && (
                       <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-30">
-                        <div className="px-4 py-3 border-b border-gray-100">
-                          <div className="text-sm font-semibold text-gray-900">{walletName}</div>
+                        <div className="px-4 py-3 border-b border-gray-200">
+                          <div className="text-sm font-semibold text-black">{walletName}</div>
                           <div className="text-xs text-gray-600 font-mono mt-1">
                             {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : ''}
                           </div>
@@ -424,20 +486,33 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                   </div>
                 )}
 
+                {/* Separator Line */}
+                <div className="h-6 w-px bg-gray-200"></div>
+
                 {/* User Profile */}
                 <div className="relative flex items-center" ref={userMenuRef}>
                   <button
                     onClick={() => {
                       setIsUserMenuOpen(!isUserMenuOpen);
-                      setIsNetworkMenuOpen(false);
                       setIsWalletMenuOpen(false);
                     }}
-                    className="flex items-center gap-2 px-3 py-2 rounded-full hover:bg-gray-50 transition-colors"
+                    className="flex items-center gap-2 px-3 py-2 rounded-full hover:bg-gray-50 transition-colors h-10"
                   >
-                    {/* Avatar with gradient */}
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-orange-400 to-pink-500 flex items-center justify-center text-white text-xs font-semibold">
-                      {getUserInitials()}
-                    </div>
+                    {/* Avatar with 3D sphere gradient */}
+                    {user && (() => {
+                      const gradient = getUserGradient(user.id, user.user_metadata);
+                      return (
+                        <div 
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
+                          style={{
+                            background: `radial-gradient(circle at 30% 30%, ${gradient.topLeft} 0%, ${gradient.centerRight} 50%, ${gradient.bottomLeft} 100%)`,
+                            boxShadow: 'inset 0 2px 4px rgba(255, 255, 255, 0.2), inset 0 -2px 4px rgba(0, 0, 0, 0.1)'
+                          }}
+                        >
+                          {getUserInitials()}
+                        </div>
+                      );
+                    })()}
                     <div className="text-left">
                       <div className="text-sm font-semibold text-gray-900">
                         {getUserDisplayName()}
@@ -473,7 +548,13 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                             </div>
                           )}
                         </div>
-                        <button className="p-1 hover:bg-gray-100 rounded">
+                        <button 
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            setIsSettingsOpen(true);
+                          }}
+                          className="p-1 hover:bg-gray-100 rounded"
+                        >
                           <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -495,22 +576,26 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                       </div>
 
                       {/* Documentation */}
-                      <Link
-                        href="/docs"
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsUserMenuOpen(false)}
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          setIsDocumentationOpen(true);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                       >
                         Documentation
-                      </Link>
+                      </button>
 
                       {/* Terms of Use */}
-                      <Link
-                        href="/terms"
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        onClick={() => setIsUserMenuOpen(false)}
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          setIsTermsOpen(true);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                       >
                         Terms of Use
-                      </Link>
+                      </button>
 
                       {/* Logout */}
                       <button
@@ -542,6 +627,23 @@ export default function Header({ onWalletConnect }: HeaderProps) {
           </div>
         </div>
       </header>
+
+      {/* Modals */}
+      <DocumentationModal 
+        isOpen={isDocumentationOpen} 
+        onClose={() => setIsDocumentationOpen(false)} 
+      />
+      <TermsModal 
+        isOpen={isTermsOpen} 
+        onClose={() => setIsTermsOpen(false)} 
+      />
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        user={user}
+        userProfile={userProfile}
+        onUpdate={refreshUserProfile}
+      />
     </>
   );
 }

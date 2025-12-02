@@ -153,7 +153,7 @@ export default function MarketDetailPopup({ market, onClose }: MarketDetailPopup
         {/* Footer */}
         <div className="border-t border-gray-200 p-6 bg-gray-50">
           <p className="text-center text-sm text-gray-600">
-            ⚡ Blind voting active - stakes and results hidden until market resolves
+            Blind voting active - stakes and results hidden until market resolves
           </p>
         </div>
       </div>

@@ -29,7 +29,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import PaymentRequestCard from '@/components/PaymentRequestCard';
-import CreateMarketSidebar from '@/components/CreateMarketSidebar';
 import Header from '@/components/Header'; // REQUIRED - Do not remove or replace with custom header
 import { supabase } from '@/lib/supabase';
 
@@ -254,16 +253,7 @@ export default function Feed() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-[350px_1fr] gap-6">
-          {/* Create Sidebar */}
-          <div className="hidden lg:block">
-            <div className="sticky top-20 z-40 bg-white border border-gray-200 rounded-2xl overflow-hidden">
-              <CreateMarketSidebar onSuccess={fetchPaymentRequests} />
-            </div>
-          </div>
-
-          {/* Main Feed */}
-          <div className="flex flex-col gap-0">
+        <div className="flex flex-col gap-0 max-w-4xl mx-auto">
             {/* Payment Requests Feed */}
             {loading ? (
               <div className="flex flex-col gap-0">
@@ -279,7 +269,7 @@ export default function Feed() {
                 <p className="text-gray-600 text-lg">
                   No payment requests found
                 </p>
-                <p className="text-sm text-gray-500 mt-2">Create one in the sidebar</p>
+                <p className="text-sm text-gray-500 mt-2">Go to Pay & Request to create one</p>
               </div>
             ) : (
               <div className="flex flex-col gap-0">
@@ -293,7 +283,6 @@ export default function Feed() {
                 ))}
               </div>
             )}
-          </div>
         </div>
       </main>
 
