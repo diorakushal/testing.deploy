@@ -8,6 +8,8 @@ import toast from 'react-hot-toast';
 import { AVAILABLE_CHAINS, getTokensForChain, getToken, getChainConfig, type TokenConfig } from '@/lib/tokenConfig';
 import { ESCROW_ADDRESSES } from '@/lib/escrowConfig';
 import { supabase } from '@/lib/supabase';
+import GasFeeDisplay from '@/components/GasFeeDisplay';
+import { useReadContract } from 'wagmi';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -108,6 +110,8 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [selectedRecipient, setSelectedRecipient] = useState<{ id: string; username: string; displayName: string } | null>(null);
   const [searchingUsers, setSearchingUsers] = useState(false);
+  const [needsApproval, setNeedsApproval] = useState<boolean>(true);
+  const [totalGasFee, setTotalGasFee] = useState<string>('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -248,6 +252,49 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
   const availableTokens = allTokens.filter(token => token.symbol === 'USDC' || token.symbol === 'USDT');
   const selectedToken = getToken(formData.tokenSymbol, formData.chainId);
   const selectedChain = getChainConfig(formData.chainId);
+  const chainIdNum = typeof formData.chainId === 'number' 
+    ? formData.chainId 
+    : (formData.chainId === 'solana' ? null : parseInt(formData.chainId as string));
+  const escrowAddress = chainIdNum ? ESCROW_ADDRESSES[chainIdNum.toString()] : undefined;
+
+  // Check token allowance for escrow contract
+  const { data: allowance, refetch: refetchAllowance } = useReadContract({
+    address: selectedToken?.address as Address,
+    abi: ERC20_ABI,
+    functionName: 'allowance',
+    args: address && escrowAddress && selectedToken?.address 
+      ? [address as Address, escrowAddress as Address]
+      : undefined,
+    query: {
+      enabled: !!(
+        mode === 'pay' && 
+        isConnected && 
+        address && 
+        escrowAddress && 
+        selectedToken?.address &&
+        chainIdNum !== null &&
+        typeof chainIdNum === 'number' &&
+        !isNaN(chainIdNum)
+      ),
+    },
+  });
+
+  // Update needsApproval when allowance changes
+  useEffect(() => {
+    if (mode === 'pay' && allowance !== undefined && formData.amount && selectedToken) {
+      const decimals = selectedToken.decimals || 6;
+      const amountInWei = parseUnits(formData.amount.toString(), decimals);
+      const hasEnoughAllowance = allowance >= amountInWei;
+      setNeedsApproval(!hasEnoughAllowance);
+    }
+  }, [allowance, formData.amount, selectedToken, mode]);
+
+  // Refetch allowance when token, chain, or address changes
+  useEffect(() => {
+    if (mode === 'pay' && isConnected && address && escrowAddress && selectedToken?.address) {
+      refetchAllowance();
+    }
+  }, [mode, formData.tokenSymbol, formData.chainId, address, escrowAddress, selectedToken?.address, refetchAllowance]);
 
   const handleCaptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -459,54 +506,63 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
         return;
       }
 
-      // Step 1: Approve token (always approve for simplicity, or check allowance first)
-      toast.loading('Approving token...');
-      
-      // Approve escrow contract to spend tokens
-      // Using a large approval amount for better UX (user can revoke later if needed)
-      const maxApproval = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
-      
-      writeContract({
-        address: selectedToken.address as Address,
-        abi: ERC20_ABI,
-        functionName: 'approve',
-        args: [escrowAddress as Address, maxApproval],
-      }, {
-        onSuccess: (approvalHash) => {
-          // Wait for approval transaction to be confirmed
-          toast.loading('Waiting for approval confirmation...');
-          // Use a separate wait hook or poll for confirmation
-          setTimeout(async () => {
-          // Wait for approval confirmation using publicClient
-          if (publicClient) {
-            try {
-              await publicClient.waitForTransactionReceipt({ hash: approvalHash });
-              toast.dismiss();
-              toast.loading('Token approved. Creating escrow payment...');
-              createEscrowPayment(escrowAddress, selectedToken.address, amountInWei);
-            } catch (error) {
-              toast.dismiss();
-              toast.error('Failed to confirm approval');
-              setLoading(false);
-              setStep('form');
+      // Step 1: Check allowance and approve token if needed
+      if (needsApproval) {
+        toast.loading('Approving token...');
+        
+        // Approve escrow contract to spend tokens
+        // Using a large approval amount for better UX (user can revoke later if needed)
+        const maxApproval = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
+        
+        writeContract({
+          address: selectedToken.address as Address,
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [escrowAddress as Address, maxApproval],
+        }, {
+          onSuccess: (approvalHash) => {
+            // Wait for approval transaction to be confirmed
+            toast.loading('Waiting for approval confirmation...');
+            // Use a separate wait hook or poll for confirmation
+            setTimeout(async () => {
+            // Wait for approval confirmation using publicClient
+            if (publicClient) {
+              try {
+                await publicClient.waitForTransactionReceipt({ hash: approvalHash });
+                toast.dismiss();
+                toast.loading('Token approved. Creating escrow payment...');
+                // Refetch allowance to update state
+                await refetchAllowance();
+                createEscrowPayment(escrowAddress, selectedToken.address, amountInWei);
+              } catch (error) {
+                toast.dismiss();
+                toast.error('Failed to confirm approval');
+                setLoading(false);
+                setStep('form');
+              }
+            } else {
+              // Fallback: wait a bit then proceed
+              setTimeout(async () => {
+                toast.dismiss();
+                toast.loading('Token approved. Creating escrow payment...');
+                await refetchAllowance();
+                createEscrowPayment(escrowAddress, selectedToken.address, amountInWei);
+              }, 3000);
             }
-          } else {
-            // Fallback: wait a bit then proceed
-            setTimeout(() => {
-              toast.dismiss();
-              toast.loading('Token approved. Creating escrow payment...');
-              createEscrowPayment(escrowAddress, selectedToken.address, amountInWei);
             }, 3000);
+          },
+          onError: (error) => {
+            toast.dismiss();
+            toast.error(error.message || 'Failed to approve token');
+            setLoading(false);
+            setStep('form');
           }
-          }, 3000);
-        },
-        onError: (error) => {
-          toast.dismiss();
-          toast.error(error.message || 'Failed to approve token');
-          setLoading(false);
-          setStep('form');
-        }
-      });
+        });
+      } else {
+        // Already approved, proceed directly to create payment
+        toast.loading('Creating escrow payment...');
+        createEscrowPayment(escrowAddress, selectedToken.address, amountInWei);
+      }
     } catch (error: any) {
       toast.dismiss();
       console.error('Error in payment flow:', error);
@@ -1042,6 +1098,38 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
               </div>
             )}
           </div>
+
+          {/* Gas Fee Display - Only for Pay mode */}
+          {mode === 'pay' && isConnected && formData.amount && parseFloat(formData.amount) > 0 && selectedToken && escrowAddress && chainIdNum !== null && typeof chainIdNum === 'number' && !isNaN(chainIdNum) && (
+            <div className="mb-4">
+              <GasFeeDisplay
+                chainId={chainIdNum}
+                tokenSymbol={formData.tokenSymbol}
+                amount={formData.amount}
+                onTotalAmountChange={setTotalGasFee}
+              />
+              {needsApproval && (
+                <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
+                  <div className="flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span>Token approval required. This will require an additional gas fee.</span>
+                  </div>
+                </div>
+              )}
+              {chainIdNum === 1 && (
+                <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-800">
+                  <div className="flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span>Ethereum gas fees are high. Consider using Base or Polygon for lower costs.</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Bottom Section - Info, Button */}
           <div className="pt-3 space-y-3">
