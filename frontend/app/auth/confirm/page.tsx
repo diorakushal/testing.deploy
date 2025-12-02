@@ -1,30 +1,83 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import Header from '@/components/Header';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import toast from 'react-hot-toast';
 
 export default function ConfirmEmailPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('Verifying your email...');
 
   useEffect(() => {
     const verifyEmail = async () => {
       try {
+        // Check if user is already authenticated (session might already be set)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          // Check if email is already verified
+          const { data: userData } = await supabase
+            .from('users')
+            .select('email_verified')
+            .eq('id', session.user.id)
+            .single();
+
+          if (userData && !userData.email_verified) {
+            // Update user profile to mark email as verified
+            await supabase
+              .from('users')
+              .update({ email_verified: true })
+              .eq('id', session.user.id);
+          }
+
+          setStatus('success');
+          setMessage('Email verified successfully!');
+          setTimeout(() => router.push('/feed'), 2000);
+          return;
+        }
+
+        // Wait a bit for the hash to be available
+        await new Promise(resolve => setTimeout(resolve, 500));
+
         // Get the token from URL hash (Supabase uses hash fragments)
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const hash = window.location.hash.substring(1);
+        
+        if (!hash) {
+          // Check query params as fallback
+          const queryParams = new URLSearchParams(window.location.search);
+          const token = queryParams.get('token');
+          const type = queryParams.get('type');
+          
+          if (token && type === 'signup') {
+            // Handle query param verification
+            const { data, error } = await supabase.auth.verifyOtp({
+              token_hash: token,
+              type: 'signup'
+            });
+
+            if (error) throw error;
+            if (data.user) {
+              await supabase.from('users').update({ email_verified: true }).eq('id', data.user.id);
+              setStatus('success');
+              setMessage('Email verified successfully!');
+              setTimeout(() => router.push('/feed'), 2000);
+              return;
+            }
+          }
+          throw new Error('No verification token found');
+        }
+
+        const hashParams = new URLSearchParams(hash);
         const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
         const type = hashParams.get('type');
 
         if (type === 'signup' && accessToken) {
           // Set the session
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
-            refresh_token: hashParams.get('refresh_token') || '',
+            refresh_token: refreshToken || '',
           });
 
           if (error) {
@@ -44,12 +97,13 @@ export default function ConfirmEmailPage() {
 
             setStatus('success');
             setMessage('Email verified successfully!');
-            toast.success('Your email has been verified!');
 
             // Redirect to feed page after 2 seconds
             setTimeout(() => {
               router.push('/feed');
             }, 2000);
+          } else {
+            throw new Error('User not found after verification');
           }
         } else {
           throw new Error('Invalid confirmation link');
@@ -58,7 +112,6 @@ export default function ConfirmEmailPage() {
         console.error('Email verification error:', error);
         setStatus('error');
         setMessage(error.message || 'Failed to verify email. The link may have expired.');
-        toast.error('Email verification failed');
       }
     };
 
@@ -67,48 +120,48 @@ export default function ConfirmEmailPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Header />
+      {/* Minimal Header */}
+      <div className="px-4 sm:px-6 pt-6 pb-4 bg-white">
+        <Link href="/feed" className="inline-block bg-white">
+          <img 
+            src="/applogo.png" 
+            alt="Xelli" 
+            className="w-10 h-10 object-contain bg-white"
+            style={{ backgroundColor: '#ffffff' }}
+          />
+        </Link>
+      </div>
       
-      <main className="flex items-center justify-center px-4 py-12 sm:py-16">
+      <main className="flex items-center justify-center px-4 py-8 sm:py-12">
         <div className="w-full max-w-md">
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 sm:p-10 text-center">
+          <div className="bg-white p-8 sm:p-10">
             {status === 'loading' && (
-              <>
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-4"></div>
-                <h1 className="text-2xl font-bold text-black mb-2">Verifying your email</h1>
-                <p className="text-gray-600">{message}</p>
-              </>
+              <div>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mb-4"></div>
+                <h1 className="text-3xl font-bold text-black mb-2">Verifying your email</h1>
+                <p className="text-gray-600 text-sm">{message}</p>
+              </div>
             )}
 
             {status === 'success' && (
-              <>
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                </div>
-                <h1 className="text-2xl font-bold text-black mb-2">Email Verified!</h1>
-                <p className="text-gray-600">{message}</p>
-                <p className="text-sm text-gray-500 mt-2">Redirecting to home...</p>
-              </>
+              <div>
+                <h1 className="text-3xl font-bold text-black mb-2">Email verified!</h1>
+                <p className="text-gray-600 text-sm mt-2">{message}</p>
+                <p className="text-gray-600 text-sm mt-3">Redirecting to home...</p>
+              </div>
             )}
 
             {status === 'error' && (
-              <>
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </div>
-                <h1 className="text-2xl font-bold text-black mb-2">Verification Failed</h1>
-                <p className="text-gray-600 mb-4">{message}</p>
+              <div>
+                <h1 className="text-3xl font-bold text-black mb-2">Verification failed</h1>
+                <p className="text-gray-600 text-sm mt-2 mb-6">{message}</p>
                 <button
                   onClick={() => router.push('/signup')}
-                  className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors duration-200 font-medium"
+                  className="w-full px-4 py-3 bg-gray-200 text-black rounded-full hover:bg-gray-300 active:scale-[0.98] transition-all duration-200 font-medium"
                 >
                   Try Again
                 </button>
-              </>
+              </div>
             )}
           </div>
         </div>

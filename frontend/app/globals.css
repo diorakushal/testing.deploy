@@ -105,20 +105,20 @@ html {
   display: inline-flex;
 }
 
-/* Connect Button Styling */
+/* Connect Button Styling - Pill Shape */
 [data-rk] button[data-testid="rk-connect-button"] {
-  border-radius: 0.5rem !important;
-  border: 1px solid #e5e7eb !important;
-  background: #ffffff !important;
+  border-radius: 9999px !important; /* Fully rounded for pill shape */
+  border: none !important;
+  background: #ffffff !important; /* White background */
   color: #000000 !important;
   font-weight: 500 !important;
   font-size: 0.875rem !important;
+  padding: 0.5rem 1rem !important;
   transition: all 0.2s ease !important;
 }
 
 [data-rk] button[data-testid="rk-connect-button"]:hover {
-  background: #f9fafb !important;
-  border-color: #d1d5db !important;
+  background: #f9fafb !important; /* Light gray on hover */
 }
 
 /* Network Selector Button */

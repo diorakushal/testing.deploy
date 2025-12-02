@@ -155,7 +155,7 @@ export default function PaymentRequestDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-white h-screen overflow-y-auto">
+    <div className="min-h-screen bg-white h-screen overflow-y-auto flex">
       {/* Header */}
       <Header 
         onWalletConnect={(address: string) => {
@@ -165,7 +165,7 @@ export default function PaymentRequestDetail() {
       />
 
       {/* Main Content - Single Crypto Request Card */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <div className="flex flex-col gap-0 max-w-2xl mx-auto">
           <PaymentRequestCard 
             request={request}

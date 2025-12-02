@@ -243,7 +243,7 @@ export default function Feed() {
   }
 
   return (
-    <div className="min-h-screen bg-white h-screen overflow-y-auto">
+    <div className="min-h-screen bg-white">
       {/* CRITICAL: Must use Header component - DO NOT create custom header with "numo" */}
       <Header 
         onWalletConnect={(address: string) => {

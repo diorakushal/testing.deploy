@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Header from '@/components/Header';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
 
@@ -376,43 +375,44 @@ export default function SignUpPage() {
           throw authError;
         }
 
-        if (authData.user) {
-          // Store additional user data in a custom users table
-          // This will be done after email confirmation, but we can prepare it
-          const { error: profileError } = await supabase
-            .from('users')
-            .insert({
-              id: authData.user.id,
-              email: formData.email.toLowerCase().trim(),
-              first_name: formData.firstName,
-              last_name: formData.lastName,
-              username: formData.username,
-              email_verified: false, // Will be updated when they confirm
-            });
+        // If signup was successful (even if user needs email confirmation)
+        if (authData && !authError) {
+          // Store additional user data in a custom users table if user was created
+          if (authData.user) {
+            const { error: profileError } = await supabase
+              .from('users')
+              .insert({
+                id: authData.user.id,
+                email: formData.email.toLowerCase().trim(),
+                first_name: formData.firstName,
+                last_name: formData.lastName,
+                username: formData.username,
+                email_verified: false, // Will be updated when they confirm
+              });
 
-          if (profileError) {
-            // Handle duplicate username or email errors
-            if (profileError.code === '23505') { // Unique constraint violation
-              if (profileError.message?.includes('username')) {
-                setUsernameError('This username is already taken');
-                toast.error('This username is already taken. Please choose another.');
-                setCurrentStep(1);
-              } else if (profileError.message?.includes('email')) {
-                setEmailError('This email is already registered. Please log in instead.');
-                toast.error('This email is already registered. Please log in instead.');
+            if (profileError) {
+              // Handle duplicate username or email errors
+              if (profileError.code === '23505') { // Unique constraint violation
+                if (profileError.message?.includes('username')) {
+                  setUsernameError('This username is already taken');
+                  toast.error('This username is already taken. Please choose another.');
+                  setCurrentStep(1);
+                  setLoading(false);
+                  return;
+                } else if (profileError.message?.includes('email')) {
+                  setEmailError('This email is already registered. Please log in instead.');
+                  toast.error('This email is already registered. Please log in instead.');
+                  setLoading(false);
+                  return;
+                }
               }
-              setLoading(false);
-              return;
+              console.error('Error creating user profile:', profileError);
             }
-            console.error('Error creating user profile:', profileError);
           }
 
-          toast.success('Account created! Please check your email to verify your account.');
-          
-          // Redirect to a confirmation page with email
-          setTimeout(() => {
-            router.push(`/auth/check-email?email=${encodeURIComponent(formData.email)}`);
-          }, 1500);
+          // Redirect to check-email page immediately
+          router.push(`/auth/check-email?email=${encodeURIComponent(formData.email)}`);
+          return;
         }
       } catch (error: any) {
         console.error('Sign up error:', error);
@@ -434,109 +434,122 @@ export default function SignUpPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Header />
-      
-      <main className="flex items-center justify-center px-4 py-12 sm:py-16">
+      <main className="flex items-center justify-center px-4 py-8 sm:py-12">
         <div className="w-full max-w-md">
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8 sm:p-10">
+          <div className="bg-white p-8 sm:p-10">
+            {/* Logo */}
+            <div className="mb-6 bg-white">
+              <Link href="/feed" className="inline-block bg-white">
+                <img 
+                  src="/applogo.png" 
+                  alt="Xelli" 
+                  className="w-16 h-16 object-contain bg-white"
+                  style={{ backgroundColor: '#ffffff' }}
+                />
+              </Link>
+            </div>
+            
             {/* Header */}
             <div className="mb-8">
-              <h1 className="text-3xl font-bold text-black mb-2">Create your account</h1>
-              <p className="text-gray-600 text-sm">
-                Already have an account?{' '}
-                <Link href="/login" className="text-black font-medium hover:underline">
-                  Log in
-                </Link>
-              </p>
-              {/* Step Indicator */}
-              <div className="flex items-center gap-2 mt-4">
-                <div className={`h-2 flex-1 rounded-full ${currentStep >= 1 ? 'bg-black' : 'bg-gray-200'}`}></div>
-                <div className={`h-2 flex-1 rounded-full ${currentStep >= 2 ? 'bg-black' : 'bg-gray-200'}`}></div>
-                <div className={`h-2 flex-1 rounded-full ${currentStep >= 3 ? 'bg-black' : 'bg-gray-200'}`}></div>
-              </div>
+              <h1 className="text-3xl font-bold text-black mb-2">
+                {currentStep === 1 ? "What's your name?" : currentStep === 2 ? "Create a password" : "What's your email?"}
+              </h1>
+              {currentStep === 1 && (
+                <>
+                  <p className="text-gray-600 text-sm mt-2">
+                    You can edit how this shows on your public profile if you go by a different name.
+                  </p>
+                  <p className="text-gray-600 text-sm mt-2">
+                    Already have an account?{' '}
+                    <Link href="/login" className="text-black font-medium hover:underline">
+                      Log in
+                    </Link>
+                  </p>
+                </>
+              )}
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-6">
               {/* Step 1: Name + Username */}
               {currentStep === 1 && (
                 <>
-                  {/* First Name and Last Name */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="firstName" className="block text-sm font-medium text-black mb-2">
-                        First name
-                      </label>
-                      <input
-                        type="text"
-                        id="firstName"
-                        name="firstName"
-                        value={formData.firstName}
-                        onChange={handleChange}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all text-black placeholder-gray-400"
-                        placeholder="John"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="lastName" className="block text-sm font-medium text-black mb-2">
-                        Last name
-                      </label>
-                      <input
-                        type="text"
-                        id="lastName"
-                        name="lastName"
-                        value={formData.lastName}
-                        onChange={handleChange}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all text-black placeholder-gray-400"
-                        placeholder="Doe"
-                        required
-                      />
-                    </div>
+                  {/* First Name */}
+                  <div>
+                    <label htmlFor="firstName" className="block text-sm font-medium text-black mb-2">
+                      First name
+                    </label>
+                    <input
+                      type="text"
+                      id="firstName"
+                      name="firstName"
+                      value={formData.firstName}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400"
+                      placeholder="First name"
+                      required
+                    />
+                  </div>
+
+                  {/* Last Name */}
+                  <div>
+                    <label htmlFor="lastName" className="block text-sm font-medium text-black mb-2">
+                      Last name
+                    </label>
+                    <input
+                      type="text"
+                      id="lastName"
+                      name="lastName"
+                      value={formData.lastName}
+                      onChange={handleChange}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400"
+                      placeholder="Last name"
+                      required
+                    />
                   </div>
 
                   {/* Username */}
-              <div>
-                <label htmlFor="username" className="block text-sm font-medium text-black mb-2">
-                  Create username
-                </label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none">
-                    @
-                  </span>
-                  <input
-                    type="text"
-                    id="username"
-                    name="username"
-                    value={formData.username}
-                    onChange={handleChange}
-                    className={`w-full pl-8 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all text-black placeholder-gray-400 ${
-                      usernameError ? 'border-red-300' : 'border-gray-300'
-                    }`}
-                    placeholder="johndoe"
-                    required
-                    minLength={5}
-                    maxLength={30}
-                    pattern="^[a-zA-Z][a-zA-Z0-9_-]*$"
-                    disabled={checkingUsername}
-                  />
-                  {checkingUsername && (
-                    <span className="absolute right-4 top-1/2 transform -translate-y-1/2">
-                      <svg className="animate-spin h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                    </span>
-                  )}
-                </div>
-                {usernameError ? (
-                  <p className="text-xs text-red-500 mt-1">{usernameError}</p>
-                ) : (
-                  <p className="text-xs text-gray-500 mt-1">
-                    5-30 characters, start with a letter. Letters, numbers, hyphens, and underscores only.
-                  </p>
-                )}
-              </div>
+                  <div>
+                    <label htmlFor="username" className="block text-sm font-medium text-black mb-2">
+                      Create username
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-500 pointer-events-none">
+                        @
+                      </span>
+                      <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        value={formData.username}
+                        onChange={handleChange}
+                        className={`w-full pl-8 pr-4 py-3 border rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400 ${
+                          usernameError ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="johndoe"
+                        required
+                        minLength={5}
+                        maxLength={30}
+                        pattern="^[a-zA-Z][a-zA-Z0-9_-]*$"
+                        disabled={checkingUsername}
+                      />
+                      {checkingUsername && (
+                        <span className="absolute right-4 top-1/2 transform -translate-y-1/2">
+                          <svg className="animate-spin h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        </span>
+                      )}
+                    </div>
+                    {usernameError ? (
+                      <p className="text-xs text-red-500 mt-1">{usernameError}</p>
+                    ) : (
+                      <p className="text-xs text-gray-500 mt-1">
+                        5-30 characters, start with a letter. Letters, numbers, hyphens, and underscores only.
+                      </p>
+                    )}
+                  </div>
                 </>
               )}
 
@@ -555,10 +568,10 @@ export default function SignUpPage() {
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
-                    className={`w-full px-4 py-2.5 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all text-black placeholder-gray-400 ${
-                      passwordError ? 'border-red-300' : 'border-gray-300'
+                    className={`w-full px-4 py-3 pr-10 border rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400 ${
+                      passwordError ? 'border-red-500' : 'border-gray-300'
                     }`}
-                    placeholder="••••••••"
+                    placeholder="Password"
                     required
                     minLength={6}
                   />
@@ -601,10 +614,10 @@ export default function SignUpPage() {
                     name="confirmPassword"
                     value={formData.confirmPassword}
                     onChange={handleChange}
-                    className={`w-full px-4 py-2.5 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all text-black placeholder-gray-400 ${
-                      confirmPasswordError ? 'border-red-300' : 'border-gray-300'
+                    className={`w-full px-4 py-3 pr-10 border rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400 ${
+                      confirmPasswordError ? 'border-red-500' : 'border-gray-300'
                     }`}
-                    placeholder="••••••••"
+                    placeholder="Confirm password"
                     required
                     minLength={6}
                   />
@@ -652,10 +665,10 @@ export default function SignUpPage() {
                       name="email"
                       value={formData.email}
                       onChange={handleChange}
-                      className={`w-full px-4 py-2.5 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all text-black placeholder-gray-400 ${
-                        emailError ? 'border-red-300' : 'border-gray-300'
+                      className={`w-full px-4 py-3 pr-10 border rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400 ${
+                        emailError ? 'border-red-500' : 'border-gray-300'
                       }`}
-                      placeholder="john@example.com"
+                      placeholder="Email"
                       required
                     />
                     {checkingEmail && (
@@ -679,12 +692,12 @@ export default function SignUpPage() {
               )}
 
               {/* Navigation Buttons */}
-              <div className="flex gap-3 pt-4">
+              <div className="flex flex-col gap-3 pt-6">
                 {currentStep > 1 && (
                   <button
                     type="button"
                     onClick={handleBack}
-                    className="flex-1 px-4 py-3 border border-gray-300 text-black rounded-lg hover:bg-gray-50 active:scale-[0.98] transition-all duration-200 font-medium"
+                    className="w-full px-4 py-3 border border-gray-300 text-black rounded-full hover:bg-gray-50 active:scale-[0.98] transition-all duration-200 font-medium"
                   >
                     Back
                   </button>
@@ -693,7 +706,7 @@ export default function SignUpPage() {
                   <button
                     type="button"
                     onClick={handleNext}
-                    className="flex-1 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 active:scale-[0.98] transition-all duration-200 font-medium"
+                    className="w-full px-4 py-3 bg-gray-200 text-black rounded-full hover:bg-gray-300 active:scale-[0.98] transition-all duration-200 font-medium"
                   >
                     Next
                   </button>
@@ -701,7 +714,7 @@ export default function SignUpPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="flex-1 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 active:scale-[0.98] transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full px-4 py-3 bg-gray-200 text-black rounded-full hover:bg-gray-300 active:scale-[0.98] transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading ? 'Creating account...' : 'Sign up'}
                   </button>
@@ -709,15 +722,10 @@ export default function SignUpPage() {
               </div>
             </form>
 
-            {/* Terms */}
-            <p className="text-xs text-gray-500 text-center mt-6">
-              By signing up, you agree to our{' '}
-              <Link href="/terms" className="text-black hover:underline">
-                Terms of Service
-              </Link>{' '}
-              and{' '}
-              <Link href="/privacy" className="text-black hover:underline">
-                Privacy Policy
+            {/* Privacy Link */}
+            <p className="text-xs text-gray-500 text-center mt-8">
+              <Link href="/privacy" className="hover:text-gray-700">
+                Your Privacy Choices
               </Link>
             </p>
           </div>

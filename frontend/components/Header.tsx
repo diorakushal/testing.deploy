@@ -38,7 +38,9 @@ export default function Header({ onWalletConnect }: HeaderProps) {
   const [shouldOpenModal, setShouldOpenModal] = useState(false);
   const { data: balance } = useBalance({
     address: address,
-    enabled: !!address,
+    query: {
+      enabled: !!address,
+    },
   });
 
   const currentChain = getChainConfig(chainId);
@@ -286,11 +288,14 @@ export default function Header({ onWalletConnect }: HeaderProps) {
         <div className="mx-auto px-4 sm:px-6 max-w-7xl">
           <div className="flex items-center gap-3 py-3.5">
             {/* Logo */}
-            <div className="flex items-center flex-shrink-0">
-              <Link href="/feed" className="flex items-center group">
-                <h1 className="text-2xl font-bold text-black tracking-tight">
-                  Xelli
-                </h1>
+            <div className="flex items-center flex-shrink-0 bg-white">
+              <Link href="/feed" className="inline-block bg-white">
+                <img 
+                  src="/applogo.png" 
+                  alt="Xelli" 
+                  className="w-12 h-12 object-contain bg-white"
+                  style={{ backgroundColor: '#ffffff' }}
+                />
               </Link>
             </div>
 
@@ -421,8 +426,6 @@ export default function Header({ onWalletConnect }: HeaderProps) {
 
                 {/* User Profile */}
                 <div className="relative flex items-center" ref={userMenuRef}>
-                  {/* Vertical Separator */}
-                  <div className="h-6 w-px bg-gray-200 mr-3"></div>
                   <button
                     onClick={() => {
                       setIsUserMenuOpen(!isUserMenuOpen);

@@ -6,6 +6,11 @@ import Providers from "@/components/WagmiProvider";
 export const metadata: Metadata = {
   title: "Xelli - Crypto Requests",
   description: "Request and send crypto payments easily",
+  icons: {
+    icon: "/websitelogo.png",
+    shortcut: "/websitelogo.png",
+    apple: "/websitelogo.png",
+  },
 };
 
 export default function RootLayout({
