@@ -62,7 +62,7 @@ export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
               </p>
               <ul className="list-disc list-inside text-gray-700 text-sm space-y-1 ml-4">
                 <li>Creating and managing payment requests</li>
-                <li>Sending and receiving cryptocurrency payments via smart contract escrow</li>
+                <li>Sending and receiving direct cryptocurrency payments</li>
                 <li>Managing user profiles and payment history</li>
                 <li>Interacting with multiple blockchain networks</li>
               </ul>
@@ -129,9 +129,8 @@ export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
                   payments to your wallet address. Payment requests are public and can be accepted by anyone.
                 </p>
                 <p>
-                  <strong>6.2 Escrow Payments:</strong> Payments sent via escrow are held in smart contracts until 
-                  accepted by the recipient. If a payment is not accepted, the sender may cancel and recover funds 
-                  (subject to expiry terms).
+                  <strong>6.2 Direct Payments:</strong> Payments are sent directly to recipient wallet addresses. 
+                  Once confirmed on the blockchain, payments cannot be reversed. Always verify recipient addresses before sending.
                 </p>
                 <p>
                   <strong>6.3 Irreversibility:</strong> Cryptocurrency transactions are irreversible once confirmed on 

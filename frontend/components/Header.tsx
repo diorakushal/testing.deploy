@@ -11,6 +11,7 @@ import toast from 'react-hot-toast';
 import DocumentationModal from '@/components/DocumentationModal';
 import TermsModal from '@/components/TermsModal';
 import SettingsModal from '@/components/SettingsModal';
+import PreferredWalletsModal from '@/components/PreferredWalletsModal';
 
 interface HeaderProps {
   onWalletConnect?: (address: string) => void;
@@ -24,6 +25,7 @@ export default function Header({ onWalletConnect }: HeaderProps) {
   const [isDocumentationOpen, setIsDocumentationOpen] = useState(false);
   const [isTermsOpen, setIsTermsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isPreferredWalletsOpen, setIsPreferredWalletsOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -575,6 +577,17 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                         </div>
                       </div>
 
+                      {/* Set Preferred Wallets */}
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          setIsPreferredWalletsOpen(true);
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        Set Preferred Wallets
+                      </button>
+
                       {/* Documentation */}
                       <button
                         onClick={() => {
@@ -643,6 +656,11 @@ export default function Header({ onWalletConnect }: HeaderProps) {
         user={user}
         userProfile={userProfile}
         onUpdate={refreshUserProfile}
+      />
+      <PreferredWalletsModal
+        isOpen={isPreferredWalletsOpen}
+        onClose={() => setIsPreferredWalletsOpen(false)}
+        userId={user?.id || ''}
       />
     </>
   );

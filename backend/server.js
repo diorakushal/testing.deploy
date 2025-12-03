@@ -1445,26 +1445,294 @@ app.patch('/api/payment-requests/:id/cancel', async (req, res) => {
   }
 });
 
-// ========== ESCROW PAYMENT ENDPOINTS ==========
+// ========== PREFERRED WALLETS ENDPOINTS ==========
 
-// Create escrow payment
-app.post('/api/escrow-payments', async (req, res) => {
+// Get preferred wallets for a user
+app.get('/api/preferred-wallets', async (req, res) => {
   try {
-    const {
-      onchainId,
-      senderAddress,
-      recipientAddress,
+    const { userId } = req.query;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'Missing userId' });
+    }
+
+    const { supabase } = require('./lib/supabase');
+
+    const { data, error } = await supabase
+      .from('preferred_wallets')
+      .select('*')
+      .eq('user_id', userId)
+      .order('chain_id', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    res.json(data || []);
+  } catch (error) {
+    console.error('Error fetching preferred wallets:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create or update preferred wallet
+app.post('/api/preferred-wallets', async (req, res) => {
+  try {
+    console.log('[PreferredWalletsAPI] ========== NEW REQUEST ==========');
+    console.log('[PreferredWalletsAPI] Full request body:', JSON.stringify(req.body, null, 2));
+    
+    const { userId, chainId, receivingWalletAddress } = req.body;
+
+    console.log('[PreferredWalletsAPI] Request received:', {
+      userId: userId ? 'present' : 'missing',
       chainId,
-      tokenAddress,
-      tokenSymbol = 'USDC',
+      chainIdType: typeof chainId,
+      chainIdString: String(chainId),
+      chainIdLowercase: String(chainId).toLowerCase(),
+      receivingWalletAddress: receivingWalletAddress ? `${receivingWalletAddress.substring(0, 10)}...` : 'missing',
+      addressLength: receivingWalletAddress?.length,
+      fullBody: JSON.stringify(req.body)
+    });
+
+    if (!userId || !chainId || !receivingWalletAddress) {
+      console.error('[PreferredWalletsAPI] Missing required fields:', {
+        hasUserId: !!userId,
+        hasChainId: !!chainId,
+        hasAddress: !!receivingWalletAddress
+      });
+      return res.status(400).json({ error: 'Missing required fields: userId, chainId, receivingWalletAddress' });
+    }
+
+    // Validate chain ID
+    // Normalize the chainId to string and lowercase for comparison
+    const chainIdNormalized = String(chainId || '').trim().toLowerCase();
+    const isSolana = chainIdNormalized === 'solana';
+    
+    console.log('[PreferredWalletsAPI] Chain ID validation:', {
+      original: chainId,
+      type: typeof chainId,
+      normalized: chainIdNormalized,
+      isSolana: isSolana,
+      comparison: `"${chainIdNormalized}" === "solana" = ${isSolana}`
+    });
+    
+    // Check if it's Solana first (explicit check)
+    if (chainIdNormalized === 'solana') {
+      console.log('[PreferredWalletsAPI] ✅ Solana chain ID validated - continuing...');
+      // Solana is valid, continue to address validation
+    } else {
+      // For EVM chains, check if it's a valid integer chain ID
+      const chainIdNum = parseInt(String(chainId).trim(), 10);
+      const validEVMChainIds = [8453, 1, 56, 137]; // Base, Ethereum, BNB, Polygon
+      
+      console.log('[PreferredWalletsAPI] EVM chain ID validation:', {
+        parsed: chainIdNum,
+        isValid: !isNaN(chainIdNum) && validEVMChainIds.includes(chainIdNum),
+        validChains: validEVMChainIds
+      });
+      
+      if (isNaN(chainIdNum) || !validEVMChainIds.includes(chainIdNum)) {
+        console.error('[PreferredWalletsAPI] ❌ Invalid chain ID:', {
+          received: chainId,
+          type: typeof chainId,
+          normalized: chainIdNormalized,
+          parsed: chainIdNum,
+          isNaN: isNaN(chainIdNum),
+          inValidList: validEVMChainIds.includes(chainIdNum)
+        });
+        return res.status(400).json({ 
+          error: `Invalid chain ID: ${chainId}. Valid chain IDs are: 8453 (Base), 1 (Ethereum), 56 (BNB), 137 (Polygon), or 'solana'` 
+        });
+      }
+      console.log('[PreferredWalletsAPI] ✅ EVM chain ID validated');
+    }
+
+    // Validate wallet address format
+    if (isSolana) {
+      console.log('[PreferredWalletsAPI] Validating Solana address:', {
+        address: receivingWalletAddress,
+        length: receivingWalletAddress?.length,
+        first10: receivingWalletAddress?.substring(0, 10)
+      });
+      
+      // Solana addresses are base58 encoded
+      // Standard addresses are typically 32-44 characters, but can be shorter for compressed keys
+      // Minimum reasonable length is 32 characters, max is 44
+      const addressLength = receivingWalletAddress?.length || 0;
+      if (!receivingWalletAddress || addressLength < 32 || addressLength > 44) {
+        console.error('[PreferredWalletsAPI] ❌ Invalid Solana address length:', {
+          address: receivingWalletAddress?.substring(0, 20),
+          length: addressLength,
+          expected: '32-44 characters',
+          min: 32,
+          max: 44
+        });
+        return res.status(400).json({ 
+          error: `Invalid Solana wallet address format. Expected 32-44 characters, got ${addressLength} characters.` 
+        });
+      }
+      // Basic check: Solana addresses don't start with 0x
+      if (receivingWalletAddress.startsWith('0x')) {
+        console.error('[PreferredWalletsAPI] ❌ Solana address starts with 0x:', receivingWalletAddress.substring(0, 20));
+        return res.status(400).json({ error: 'Invalid Solana wallet address format (should not start with 0x)' });
+      }
+      // Basic base58 check: should only contain alphanumeric characters
+      if (!/^[A-Za-z0-9]+$/.test(receivingWalletAddress)) {
+        console.error('[PreferredWalletsAPI] ❌ Solana address contains invalid characters:', {
+          address: receivingWalletAddress,
+          hasInvalidChars: !/^[A-Za-z0-9]+$/.test(receivingWalletAddress)
+        });
+        return res.status(400).json({ error: 'Invalid Solana wallet address format (contains invalid characters)' });
+      }
+      console.log('[PreferredWalletsAPI] ✅ Solana address format validated');
+    } else {
+      // EVM addresses must be 0x followed by 40 hex characters
+      if (!/^0x[a-fA-F0-9]{40}$/.test(receivingWalletAddress)) {
+        console.error('[PreferredWalletsAPI] Invalid EVM address format:', receivingWalletAddress.substring(0, 20));
+        return res.status(400).json({ error: 'Invalid wallet address format' });
+      }
+    }
+
+    const { supabase } = require('./lib/supabase');
+
+    // First, check if wallet already exists for this user/chain
+    // Note: chain_id is stored as string in database
+    const chainIdStr = isSolana ? 'solana' : String(chainId);
+    const { data: existing } = await supabase
+      .from('preferred_wallets')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('chain_id', chainIdStr) // Convert to string to match database schema
+      .single();
+
+    let result;
+    if (existing) {
+      // Update existing
+      const { data, error } = await supabase
+        .from('preferred_wallets')
+        .update({
+          receiving_wallet_address: isSolana ? receivingWalletAddress : receivingWalletAddress.toLowerCase(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existing.id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      result = data;
+    } else {
+      // Insert new (chain_id is stored as string in database)
+      const { data, error } = await supabase
+        .from('preferred_wallets')
+        .insert({
+          user_id: userId,
+          chain_id: chainIdStr, // Use string format (already converted above)
+          receiving_wallet_address: isSolana ? receivingWalletAddress : receivingWalletAddress.toLowerCase()
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      result = data;
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error saving preferred wallet:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete preferred wallet
+app.delete('/api/preferred-wallets/:id', async (req, res) => {
+  try {
+    const walletId = req.params.id;
+
+    if (!walletId) {
+      return res.status(400).json({ error: 'Missing wallet ID' });
+    }
+
+    const { supabase } = require('./lib/supabase');
+
+    const { error } = await supabase
+      .from('preferred_wallets')
+      .delete()
+      .eq('id', walletId);
+
+    if (error) {
+      throw error;
+    }
+
+    res.json({ message: 'Preferred wallet deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting preferred wallet:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get preferred wallets for a specific user (for payment sending)
+app.get('/api/preferred-wallets/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'Missing userId' });
+    }
+
+    const { supabase } = require('./lib/supabase');
+
+    const { data, error } = await supabase
+      .from('preferred_wallets')
+      .select('*')
+      .eq('user_id', userId)
+      .order('chain_id', { ascending: true });
+
+    if (error) {
+      throw error;
+    }
+
+    res.json(data || []);
+  } catch (error) {
+    console.error('Error fetching user preferred wallets:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== PAYMENT SENDS ENDPOINTS ==========
+
+// Create payment send (record of a direct payment)
+app.post('/api/payment-sends', async (req, res) => {
+  try {
+    console.log('[PaymentSendsAPI] 📥 POST /api/payment-sends - Request received');
+    console.log('[PaymentSendsAPI] Request body:', JSON.stringify(req.body, null, 2));
+    
+    const {
+      senderAddress,
+      senderUserId,
+      recipientAddress,
+      recipientUserId,
       amount,
-      expiry,
-      txHashCreate
+      tokenSymbol = 'USDC',
+      tokenAddress,
+      chainId,
+      chainName,
+      caption,
+      txHash
     } = req.body;
 
     // Validate required fields
-    if (!onchainId || !senderAddress || !recipientAddress || !chainId || !tokenAddress || !amount || !txHashCreate) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    const missingFields = [];
+    if (!senderAddress) missingFields.push('senderAddress');
+    if (!recipientAddress) missingFields.push('recipientAddress');
+    if (!amount) missingFields.push('amount');
+    if (!tokenAddress) missingFields.push('tokenAddress');
+    if (!chainId) missingFields.push('chainId');
+    if (!chainName) missingFields.push('chainName');
+    if (!txHash) missingFields.push('txHash');
+
+    if (missingFields.length > 0) {
+      console.error('[PaymentSendsAPI] ❌ Missing required fields:', missingFields);
+      return res.status(400).json({ error: `Missing required fields: ${missingFields.join(', ')}` });
     }
 
     if (parseFloat(amount) <= 0) {
@@ -1473,143 +1741,171 @@ app.post('/api/escrow-payments', async (req, res) => {
 
     const { supabase } = require('./lib/supabase');
 
+    const insertData = {
+      sender_address: senderAddress,
+      recipient_address: recipientAddress,
+      amount: parseFloat(amount),
+      token_symbol: tokenSymbol,
+      token_address: tokenAddress,
+      chain_id: chainId.toString(),
+      chain_name: chainName,
+      caption: caption || null,
+      status: 'pending', // Will be updated to 'confirmed' when transaction is confirmed
+      tx_hash: txHash
+    };
+
+    if (senderUserId) {
+      insertData.sender_user_id = senderUserId;
+    }
+
+    if (recipientUserId) {
+      insertData.recipient_user_id = recipientUserId;
+    }
+
+    console.log('[PaymentSendsAPI] 📤 Inserting payment send into database:', JSON.stringify(insertData, null, 2));
+    
     const { data, error } = await supabase
-      .from('escrow_payments')
-      .insert({
-        onchain_id: parseInt(onchainId),
-        sender_address: senderAddress,
-        recipient_address: recipientAddress,
-        chain_id: parseInt(chainId),
-        token_address: tokenAddress,
-        token_symbol: tokenSymbol,
-        amount: parseFloat(amount),
-        expiry: expiry ? new Date(expiry * 1000).toISOString() : null,
-        status: 'pending',
-        tx_hash_create: txHashCreate
-      })
+      .from('payment_sends')
+      .insert(insertData)
       .select()
       .single();
 
     if (error) {
-      console.error('Error creating escrow payment:', error);
+      console.error('[PaymentSendsAPI] ❌ Error creating payment send:', error);
+      console.error('[PaymentSendsAPI] Error details:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
       throw error;
     }
 
+    console.log('[PaymentSendsAPI] ✅ Payment send created successfully:', data);
     res.json(data);
   } catch (error) {
-    console.error('Error creating escrow payment:', error);
+    console.error('Error creating payment send:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get escrow payment by ID
-app.get('/api/escrow-payments/:id', async (req, res) => {
+// Get payment sends
+app.get('/api/payment-sends', async (req, res) => {
   try {
-    const paymentId = req.params.id;
+    const { sender_user_id, recipient_user_id, sender_address, recipient_address, status } = req.query;
+
+    console.log('[PaymentSendsAPI] Fetching payment sends', { sender_user_id, recipient_user_id, sender_address, recipient_address, status });
+
     const { supabase } = require('./lib/supabase');
 
-    const { data, error } = await supabase
-      .from('escrow_payments')
+    let query = supabase
+      .from('payment_sends')
       .select('*')
-      .eq('id', paymentId)
-      .single();
+      .order('created_at', { ascending: false });
 
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return res.status(404).json({ error: 'Escrow payment not found' });
-      }
-      throw error;
+    if (sender_user_id) {
+      query = query.eq('sender_user_id', sender_user_id);
     }
 
-    res.json(data);
-  } catch (error) {
-    console.error('Error fetching escrow payment:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get escrow payments (with filters)
-app.get('/api/escrow-payments', async (req, res) => {
-  try {
-    const { senderAddress, recipientAddress, status, chainId } = req.query;
-    const { supabase } = require('./lib/supabase');
-
-    let query = supabase.from('escrow_payments').select('*');
-
-    if (senderAddress) {
-      query = query.eq('sender_address', senderAddress);
+    if (recipient_user_id) {
+      query = query.eq('recipient_user_id', recipient_user_id);
     }
-    if (recipientAddress) {
-      query = query.eq('recipient_address', recipientAddress);
+
+    if (sender_address) {
+      query = query.eq('sender_address', sender_address);
     }
+
+    if (recipient_address) {
+      query = query.eq('recipient_address', recipient_address);
+    }
+
     if (status) {
       query = query.eq('status', status);
     }
-    if (chainId) {
-      query = query.eq('chain_id', parseInt(chainId));
-    }
-
-    query = query.order('created_at', { ascending: false });
 
     const { data, error } = await query;
 
     if (error) {
+      console.error('[PaymentSendsAPI] Error fetching payment sends:', error);
       throw error;
+    }
+
+    console.log('[PaymentSendsAPI] Found payment sends:', data?.length || 0, data);
+
+    // Fetch usernames for sender and recipient
+    if (data && data.length > 0) {
+      const uniqueSenderIds = [...new Set(data.map(s => s.sender_user_id).filter(Boolean))];
+      const uniqueRecipientIds = [...new Set(data.map(s => s.recipient_user_id).filter(Boolean))];
+      const allUserIds = [...uniqueSenderIds, ...uniqueRecipientIds];
+      
+      if (allUserIds.length > 0) {
+        const { data: users, error: usersError } = await supabase
+          .from('users')
+          .select('id, username')
+          .in('id', allUserIds);
+        
+        if (!usersError && users) {
+          // Create a map of user_id -> username
+          const usernameMap = {};
+          users.forEach(user => {
+            usernameMap[user.id] = user.username;
+          });
+          
+          // Add usernames to each payment send
+          data.forEach(send => {
+            if (send.sender_user_id && usernameMap[send.sender_user_id]) {
+              send.sender_username = usernameMap[send.sender_user_id];
+            }
+            if (send.recipient_user_id && usernameMap[send.recipient_user_id]) {
+              send.recipient_username = usernameMap[send.recipient_user_id];
+            }
+          });
+        }
+      }
     }
 
     res.json(data || []);
   } catch (error) {
-    console.error('Error fetching escrow payments:', error);
+    console.error('Error fetching payment sends:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Sync escrow payment status (after claim or cancel)
-app.post('/api/escrow-payments/:id/sync', async (req, res) => {
+// Update payment send status (mark as confirmed)
+app.patch('/api/payment-sends/:id/confirmed', async (req, res) => {
   try {
-    const paymentId = req.params.id;
-    const { txHashClaim, txHashCancel } = req.body;
+    const { id } = req.params;
+    const { txHash } = req.body;
+
+    if (!id) {
+      return res.status(400).json({ error: 'Missing payment send ID' });
+    }
+
     const { supabase } = require('./lib/supabase');
 
-    // First, get the current payment
-    const { data: payment, error: fetchError } = await supabase
-      .from('escrow_payments')
-      .select('*')
-      .eq('id', paymentId)
-      .single();
-
-    if (fetchError || !payment) {
-      return res.status(404).json({ error: 'Escrow payment not found' });
-    }
-
     const updateData = {
-      updated_at: new Date().toISOString()
+      status: 'confirmed',
+      confirmed_at: new Date().toISOString()
     };
 
-    if (txHashClaim) {
-      updateData.status = 'claimed';
-      updateData.tx_hash_claim = txHashClaim;
-      updateData.claimed_at = new Date().toISOString();
-    } else if (txHashCancel) {
-      updateData.status = 'cancelled';
-      updateData.tx_hash_cancel = txHashCancel;
-      updateData.cancelled_at = new Date().toISOString();
+    if (txHash) {
+      updateData.tx_hash = txHash;
     }
 
-    const { data: updatedPayment, error: updateError } = await supabase
-      .from('escrow_payments')
+    const { data, error } = await supabase
+      .from('payment_sends')
       .update(updateData)
-      .eq('id', paymentId)
+      .eq('id', id)
       .select()
       .single();
 
-    if (updateError) {
-      throw updateError;
+    if (error) {
+      throw error;
     }
 
-    res.json(updatedPayment);
+    res.json(data);
   } catch (error) {
-    console.error('Error syncing escrow payment:', error);
+    console.error('Error updating payment send:', error);
     res.status(500).json({ error: error.message });
   }
 });

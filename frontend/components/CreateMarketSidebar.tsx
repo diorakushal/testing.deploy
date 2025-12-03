@@ -3,13 +3,10 @@
 import { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import { useAccount, useChainId, useSwitchChain, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
-import { parseUnits, Address, isAddress, formatUnits, decodeEventLog } from 'viem';
+import { parseUnits, Address, isAddress, formatUnits } from 'viem';
 import toast from 'react-hot-toast';
 import { AVAILABLE_CHAINS, getTokensForChain, getToken, getChainConfig, type TokenConfig } from '@/lib/tokenConfig';
-import { ESCROW_ADDRESSES } from '@/lib/escrowConfig';
 import { supabase } from '@/lib/supabase';
-import GasFeeDisplay from '@/components/GasFeeDisplay';
-import { useReadContract } from 'wagmi';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -47,34 +44,6 @@ const ERC20_ABI = [
   }
 ] as const;
 
-// Escrow Contract ABI
-const ESCROW_ABI = [
-  {
-    inputs: [
-      { name: 'recipient', type: 'address' },
-      { name: 'token', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-      { name: 'expiry', type: 'uint64' }
-    ],
-    name: 'createPayment',
-    outputs: [{ name: '', type: 'uint256' }],
-    stateMutability: 'nonpayable',
-    type: 'function'
-  },
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true, name: 'paymentId', type: 'uint256' },
-      { indexed: true, name: 'sender', type: 'address' },
-      { indexed: true, name: 'recipient', type: 'address' },
-      { name: 'token', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-      { name: 'expiry', type: 'uint64' }
-    ],
-    name: 'PaymentCreated',
-    type: 'event'
-  }
-] as const;
 
 interface CreateMarketSidebarProps {
   onSuccess: () => void;
@@ -88,7 +57,9 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
   const { writeContract, data: hash, isPending, error } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ 
     hash,
-    enabled: !!hash 
+    query: {
+      enabled: !!hash 
+    }
   });
   
   // Mode: 'pay' or 'request'
@@ -108,10 +79,8 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
   const [userId, setUserId] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const [selectedRecipient, setSelectedRecipient] = useState<{ id: string; username: string; displayName: string } | null>(null);
+  const [selectedRecipient, setSelectedRecipient] = useState<{ id: string; username: string; displayName: string; walletAddress?: string } | null>(null);
   const [searchingUsers, setSearchingUsers] = useState(false);
-  const [needsApproval, setNeedsApproval] = useState<boolean>(true);
-  const [totalGasFee, setTotalGasFee] = useState<string>('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -192,11 +161,11 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
       clearTimeout(searchTimeoutRef.current);
     }
 
-    // Only search if there's text, no recipient selected, and in request mode
+    // Search if there's text, no recipient selected, in both request and pay modes
     // Remove @ prefix if user typed it
     const cleanTo = formData.to.replace(/^@+/, '').trim();
     
-    if (mode === 'request' && cleanTo && cleanTo.length >= 1 && !selectedRecipient) {
+    if (cleanTo && cleanTo.length >= 1 && !selectedRecipient) {
       searchTimeoutRef.current = setTimeout(() => {
         console.log('Searching for users by username:', cleanTo);
         searchUsers(cleanTo);
@@ -255,46 +224,6 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
   const chainIdNum = typeof formData.chainId === 'number' 
     ? formData.chainId 
     : (formData.chainId === 'solana' ? null : parseInt(formData.chainId as string));
-  const escrowAddress = chainIdNum ? ESCROW_ADDRESSES[chainIdNum.toString()] : undefined;
-
-  // Check token allowance for escrow contract
-  const { data: allowance, refetch: refetchAllowance } = useReadContract({
-    address: selectedToken?.address as Address,
-    abi: ERC20_ABI,
-    functionName: 'allowance',
-    args: address && escrowAddress && selectedToken?.address 
-      ? [address as Address, escrowAddress as Address]
-      : undefined,
-    query: {
-      enabled: !!(
-        mode === 'pay' && 
-        isConnected && 
-        address && 
-        escrowAddress && 
-        selectedToken?.address &&
-        chainIdNum !== null &&
-        typeof chainIdNum === 'number' &&
-        !isNaN(chainIdNum)
-      ),
-    },
-  });
-
-  // Update needsApproval when allowance changes
-  useEffect(() => {
-    if (mode === 'pay' && allowance !== undefined && formData.amount && selectedToken) {
-      const decimals = selectedToken.decimals || 6;
-      const amountInWei = parseUnits(formData.amount.toString(), decimals);
-      const hasEnoughAllowance = allowance >= amountInWei;
-      setNeedsApproval(!hasEnoughAllowance);
-    }
-  }, [allowance, formData.amount, selectedToken, mode]);
-
-  // Refetch allowance when token, chain, or address changes
-  useEffect(() => {
-    if (mode === 'pay' && isConnected && address && escrowAddress && selectedToken?.address) {
-      refetchAllowance();
-    }
-  }, [mode, formData.tokenSymbol, formData.chainId, address, escrowAddress, selectedToken?.address, refetchAllowance]);
 
   const handleCaptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -312,87 +241,111 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
     // No need to adjust height - keeping fixed size
   };
 
-  // Handle transaction success - need to parse PaymentCreated event
-  useEffect(() => {
-    if (isSuccess && hash && mode === 'pay') {
-      handleEscrowPaymentSuccess(hash);
-    }
-  }, [isSuccess, hash, mode]);
+  // Store payment send ID to update status later
+  const [paymentSendId, setPaymentSendId] = useState<string | null>(null);
 
-  const handleEscrowPaymentSuccess = async (txHash: string) => {
+  // Handle transaction success for direct payments
+  useEffect(() => {
+    console.log('[CreateMarketSidebar] Transaction receipt effect', {
+      isSuccess,
+      hash,
+      mode,
+      isConfirming,
+      shouldCallHandler: isSuccess && hash && mode === 'pay'
+    });
+    
+    if (isSuccess && hash && mode === 'pay') {
+      console.log('[CreateMarketSidebar] ✅ Transaction confirmed, calling handleDirectPaymentSuccess');
+      handleDirectPaymentSuccess(hash);
+    }
+  }, [isSuccess, hash, mode, isConfirming]);
+
+  // Also listen for hash changes to log when transaction is submitted
+  useEffect(() => {
+    if (hash && mode === 'pay') {
+      console.log('[CreateMarketSidebar] 📝 Transaction hash received:', hash);
+      console.log('[CreateMarketSidebar] Waiting for transaction receipt...');
+    }
+  }, [hash, mode]);
+
+  const handleDirectPaymentSuccess = async (txHash: string) => {
+    console.log('[CreateMarketSidebar] 🎉 handleDirectPaymentSuccess called with txHash:', txHash);
     try {
       toast.dismiss();
-      toast.loading('Processing payment...');
-
-      if (!publicClient) {
-        throw new Error('Public client not available');
-      }
-
-      const receipt = await publicClient.getTransactionReceipt({ hash: txHash as `0x${string}` });
       
-      // Find PaymentCreated event in logs
-      const escrowAddress = ESCROW_ADDRESSES[formData.chainId.toString()];
-      if (!escrowAddress) {
-        throw new Error('Escrow address not found');
-      }
-
-      // Parse event from logs
-      let paymentId: bigint | null = null;
-      for (const log of receipt.logs) {
-        if (log.address.toLowerCase() === escrowAddress.toLowerCase()) {
-          // Try to decode PaymentCreated event
-          // Event signature: PaymentCreated(uint256 indexed paymentId, address indexed sender, address indexed recipient, address token, uint256 amount, uint64 expiry)
+      // If payment send was already created in onSuccess callback, just update status
+      if (paymentSendId) {
+        console.log('[CreateMarketSidebar] Payment send already created, updating status to confirmed');
+        try {
+          await axios.patch(`${API_URL}/payment-sends/${paymentSendId}/confirmed`, {
+            txHash: txHash
+          });
+          console.log('[CreateMarketSidebar] ✅ Payment send marked as confirmed');
+        } catch (error: any) {
+          console.error('[CreateMarketSidebar] ❌ Error updating payment send status:', error);
+        }
+      } else {
+        // Fallback: Create payment send if it wasn't created in onSuccess
+        console.log('[CreateMarketSidebar] Payment send not created yet, creating now...');
+        const recipientAddress = selectedRecipient?.walletAddress || formData.to;
+        
+        if (selectedToken && selectedChain && recipientAddress && address) {
           try {
-            const decoded = decodeEventLog({
-              abi: ESCROW_ABI,
-              data: log.data,
-              topics: log.topics,
-            });
-            if (decoded.eventName === 'PaymentCreated') {
-              paymentId = decoded.args.paymentId as bigint;
-              break;
+            const payload = {
+              senderAddress: address,
+              senderUserId: userId,
+              recipientAddress: recipientAddress,
+              recipientUserId: selectedRecipient?.id || null,
+              amount: formData.amount,
+              tokenSymbol: selectedToken.symbol,
+              tokenAddress: selectedToken.address,
+              chainId: formData.chainId,
+              chainName: selectedChain.name,
+              caption: formData.caption || null,
+              txHash: txHash
+            };
+            console.log('[CreateMarketSidebar] 📤 Creating payment send with payload:', JSON.stringify(payload, null, 2));
+            const response = await axios.post(`${API_URL}/payment-sends`, payload);
+            console.log('[CreateMarketSidebar] ✅ Payment send record created successfully:', response.data);
+            setPaymentSendId(response.data.id);
+            
+            // Update status to confirmed
+            try {
+              await axios.patch(`${API_URL}/payment-sends/${response.data.id}/confirmed`, {
+                txHash: txHash
+              });
+              console.log('[CreateMarketSidebar] ✅ Payment send marked as confirmed');
+            } catch (error: any) {
+              console.error('[CreateMarketSidebar] ❌ Error updating payment send status:', error);
             }
-          } catch (e) {
-            // Not the event we're looking for
-            continue;
+          } catch (error: any) {
+            console.error('[CreateMarketSidebar] ❌ Error creating payment send record:', error);
+            console.error('[CreateMarketSidebar] Error details:', {
+              message: error.message,
+              response: error.response?.data,
+              status: error.response?.status
+            });
+            toast.error(`Failed to record payment: ${error.response?.data?.error || error.message}`);
           }
         }
       }
-
-      if (!paymentId) {
-        throw new Error('Could not find PaymentCreated event');
-      }
-
-      // Save to backend
-      const token = getToken(formData.tokenSymbol, formData.chainId);
-      const decimals = token?.decimals || 6;
-      const amountInWei = parseUnits(formData.amount.toString(), decimals);
-
-      await axios.post(`${API_URL}/escrow-payments`, {
-        onchainId: paymentId.toString(),
-        senderAddress: address,
-        recipientAddress: formData.to,
-        chainId: typeof formData.chainId === 'number' ? formData.chainId : parseInt(formData.chainId as string),
-        tokenAddress: token?.address,
-        tokenSymbol: formData.tokenSymbol,
-        amount: amountInWei.toString(),
-        expiry: null, // No expiry for now
-        txHashCreate: txHash
-      });
-
-      toast.dismiss();
-      toast.success('Escrow payment created! Recipient can now accept it.');
+      
+      toast.success('Payment sent successfully!');
       setStep('success');
+      
+      // Call onSuccess immediately to refresh feed, then reset form after delay
+      onSuccess(); // This will refresh the feed
       
       setTimeout(() => {
         setFormData({ amount: '', to: '', caption: '', chainId: (chainId || 8453) as number | string, tokenSymbol: 'USDC' });
         setCharCount(0);
+        setSelectedRecipient(null);
+        setPaymentSendId(null);
         setStep('form');
-        onSuccess();
       }, 2000);
     } catch (error: any) {
       toast.dismiss();
-      console.error('Error processing escrow payment:', error);
+      console.error('Error processing payment:', error);
       toast.error(error.message || 'Failed to process payment');
       setLoading(false);
       setStep('form');
@@ -423,12 +376,13 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
       toast.error('Minimum amount is 0.01 USDC');
       return false;
     }
-    if (mode === 'pay' && !formData.to) {
-      toast.error('Please enter a recipient address');
+    if (mode === 'pay' && !formData.to && !selectedRecipient) {
+      toast.error('Please enter a recipient username or wallet address');
       return false;
     }
-    if (mode === 'pay' && !isAddress(formData.to)) {
-      toast.error('Please enter a valid recipient address');
+    // Allow payment if user has wallet address OR if formData.to is a valid address
+    if (mode === 'pay' && selectedRecipient && !selectedRecipient.walletAddress && !isAddress(formData.to)) {
+      toast.error('Please enter a wallet address for the recipient');
       return false;
     }
     return true;
@@ -440,33 +394,114 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
       return;
     }
 
-    // Check if Solana is selected (not supported for escrow payments yet)
-    const isSolana = formData.chainId === 'solana' || String(formData.chainId).toLowerCase() === 'solana';
-    if (isSolana) {
-      toast.error('Escrow payments on Solana are not yet supported. Please use Request mode.');
-      return;
-    }
-
     if (!selectedToken || !selectedChain) {
       toast.error('Invalid token or chain selection');
       return;
     }
 
-    // Check if escrow contract is deployed on this chain
-    const chainIdNum = typeof formData.chainId === 'number' ? formData.chainId : parseInt(formData.chainId as string);
-    const escrowAddress = ESCROW_ADDRESSES[chainIdNum.toString()];
+    // Get recipient wallet address from selected user or form input
+    let recipientAddress: string;
+    let recipientUserId: string | null = null;
     
-    if (!escrowAddress) {
-      toast.error(`Escrow contract not deployed on ${selectedChain.name}. Please deploy first.`);
+    if (selectedRecipient?.walletAddress) {
+      // Use preferred wallet from selected recipient
+      recipientAddress = selectedRecipient.walletAddress;
+      recipientUserId = selectedRecipient.id;
+    } else if (isAddress(formData.to)) {
+      // Use manually entered wallet address
+      recipientAddress = formData.to;
+    } else if (selectedRecipient) {
+      // User selected but no preferred wallet - need manual address entry
+      toast.error('Please enter a wallet address for this recipient');
+      return;
+    } else {
+      // Username entered but not selected - try to look it up
+      const cleanUsername = formData.to.replace(/^@+/, '').trim();
+      if (cleanUsername.length > 0) {
+        try {
+          setLoading(true);
+          toast.loading('Looking up recipient...');
+          
+          // Search for user by username
+          const searchResponse = await axios.get(`${API_URL}/users/search`, {
+            params: { q: cleanUsername },
+            timeout: 5000
+          });
+          
+          const foundUser = searchResponse.data.find((u: any) => 
+            u.username?.toLowerCase() === cleanUsername.toLowerCase()
+          );
+          
+          if (!foundUser) {
+            toast.dismiss();
+            toast.error('Recipient wallet address not found. Please try again.');
+            setLoading(false);
+            return;
+          }
+          
+          // Fetch preferred wallets for this user
+          const walletResponse = await axios.get(`${API_URL}/preferred-wallets/user/${foundUser.id}`);
+          const preferredWallets = walletResponse.data || [];
+          
+          // Find wallet for the selected chain
+          const targetChainId = formData.chainId;
+          const chainWallet = preferredWallets.find((w: any) => {
+            const wChainId = String(w.chain_id).toLowerCase();
+            const targetChainIdStr = String(targetChainId).toLowerCase();
+            return wChainId === targetChainIdStr;
+          });
+          
+          if (!chainWallet || !chainWallet.receiving_wallet_address) {
+            toast.dismiss();
+            const chainName = getChainConfig(targetChainId as number)?.name || 'this chain';
+            toast.error(`Recipient wallet address not found. ${foundUser.username || 'User'} does not have a preferred wallet for ${chainName}.`);
+            setLoading(false);
+            return;
+          }
+          
+          // Use the found wallet address
+          recipientAddress = chainWallet.receiving_wallet_address;
+          recipientUserId = foundUser.id;
+          
+          // Update selectedRecipient for future reference
+          setSelectedRecipient({
+            id: foundUser.id,
+            username: foundUser.username || '',
+            displayName: foundUser.first_name && foundUser.last_name
+              ? `${foundUser.first_name} ${foundUser.last_name}`
+              : foundUser.first_name || foundUser.displayName || foundUser.email?.split('@')[0] || 'User',
+            walletAddress: chainWallet.receiving_wallet_address
+          });
+          
+          toast.dismiss();
+        } catch (error: any) {
+          toast.dismiss();
+          console.error('Error looking up recipient:', error);
+          toast.error('Recipient wallet address not found. Please try again.');
+          return;
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        toast.error('Please select a recipient or enter a wallet address');
+        return;
+      }
+    }
+
+    if (!isAddress(recipientAddress)) {
+      toast.error('Invalid recipient address');
       return;
     }
+
+    const chainIdNum = typeof formData.chainId === 'number' 
+      ? formData.chainId 
+      : parseInt(formData.chainId as string);
 
     // Check if we need to switch chains
     if (chainIdNum !== chainId && switchChain) {
       try {
         toast.loading('Switching chain...');
         await switchChain({ chainId: chainIdNum as any });
-        // Wait a bit for chain switch
         await new Promise(resolve => setTimeout(resolve, 2000));
         toast.dismiss();
       } catch (error) {
@@ -485,13 +520,6 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
       const decimals = token?.decimals || 6;
       const amountInWei = parseUnits(formData.amount.toString(), decimals);
 
-      if (!isAddress(formData.to)) {
-        toast.error('Invalid recipient address');
-        setLoading(false);
-        setStep('form');
-        return;
-      }
-
       if (!isAddress(selectedToken.address)) {
         toast.error('Invalid token address');
         setLoading(false);
@@ -499,109 +527,82 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
         return;
       }
 
-      if (!isAddress(escrowAddress)) {
-        toast.error('Invalid escrow contract address');
-        setLoading(false);
-        setStep('form');
-        return;
-      }
+      toast.loading('Sending payment...');
 
-      // Step 1: Check allowance and approve token if needed
-      if (needsApproval) {
-        toast.loading('Approving token...');
-        
-        // Approve escrow contract to spend tokens
-        // Using a large approval amount for better UX (user can revoke later if needed)
-        const maxApproval = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
-        
-        writeContract({
-          address: selectedToken.address as Address,
-          abi: ERC20_ABI,
-          functionName: 'approve',
-          args: [escrowAddress as Address, maxApproval],
-        }, {
-          onSuccess: (approvalHash) => {
-            // Wait for approval transaction to be confirmed
-            toast.loading('Waiting for approval confirmation...');
-            // Use a separate wait hook or poll for confirmation
-            setTimeout(async () => {
-            // Wait for approval confirmation using publicClient
-            if (publicClient) {
-              try {
-                await publicClient.waitForTransactionReceipt({ hash: approvalHash });
-                toast.dismiss();
-                toast.loading('Token approved. Creating escrow payment...');
-                // Refetch allowance to update state
-                await refetchAllowance();
-                createEscrowPayment(escrowAddress, selectedToken.address, amountInWei);
-              } catch (error) {
-                toast.dismiss();
-                toast.error('Failed to confirm approval');
-                setLoading(false);
-                setStep('form');
-              }
-            } else {
-              // Fallback: wait a bit then proceed
-              setTimeout(async () => {
-                toast.dismiss();
-                toast.loading('Token approved. Creating escrow payment...');
-                await refetchAllowance();
-                createEscrowPayment(escrowAddress, selectedToken.address, amountInWei);
-              }, 3000);
-            }
-            }, 3000);
-          },
-          onError: (error) => {
-            toast.dismiss();
-            toast.error(error.message || 'Failed to approve token');
-            setLoading(false);
-            setStep('form');
-          }
-        });
-      } else {
-        // Already approved, proceed directly to create payment
-        toast.loading('Creating escrow payment...');
-        createEscrowPayment(escrowAddress, selectedToken.address, amountInWei);
-      }
-    } catch (error: any) {
-      toast.dismiss();
-      console.error('Error in payment flow:', error);
-      toast.error(error.message || 'Failed to send payment');
-      setLoading(false);
-      setStep('form');
-    }
-  };
+      // Store form data before transaction (in case component unmounts or state resets)
+      const paymentData = {
+        senderAddress: address!,
+        senderUserId: userId,
+        recipientAddress: recipientAddress,
+        recipientUserId: recipientUserId || selectedRecipient?.id || null,
+        amount: formData.amount,
+        tokenSymbol: selectedToken.symbol,
+        tokenAddress: selectedToken.address,
+        chainId: formData.chainId,
+        chainName: selectedChain.name,
+        caption: formData.caption || null
+      };
 
-  const createEscrowPayment = async (escrowAddress: string, tokenAddress: string, amountInWei: bigint) => {
-    try {
-      // No expiry for now (0 = no expiry)
-      const expiry = 0;
-
-      toast.loading('Creating escrow payment...');
-
-      // Create payment on escrow contract
+      // Direct transfer to recipient
       writeContract({
-        address: escrowAddress as Address,
-        abi: ESCROW_ABI,
-        functionName: 'createPayment',
-        args: [
-          formData.to as Address,
-          tokenAddress as Address,
-          amountInWei,
-          BigInt(expiry)
-        ],
+        address: selectedToken.address as Address,
+        abi: ERC20_ABI,
+        functionName: 'transfer',
+        args: [recipientAddress as Address, amountInWei],
       }, {
-        onError: (error) => {
+        onSuccess: async (txHash) => {
+          console.log('[CreateMarketSidebar] ✅ writeContract onSuccess called with hash:', txHash);
+          toast.loading('Transaction pending...');
+          
+          // FALLBACK: Create payment send immediately when hash is received
+          // Don't wait for transaction receipt - create record now, update status later
+          if (txHash && mode === 'pay') {
+            console.log('[CreateMarketSidebar] 📝 Creating payment send record immediately with hash:', txHash);
+            try {
+              const payload = {
+                ...paymentData,
+                txHash: txHash
+              };
+              console.log('[CreateMarketSidebar] 📤 Creating payment send with payload:', JSON.stringify(payload, null, 2));
+              const response = await axios.post(`${API_URL}/payment-sends`, payload);
+              console.log('[CreateMarketSidebar] ✅ Payment send record created successfully:', response.data);
+              setPaymentSendId(response.data.id);
+            } catch (error: any) {
+              console.error('[CreateMarketSidebar] ❌ Error creating payment send record (fallback):', error);
+              console.error('[CreateMarketSidebar] Error details:', {
+                message: error.message,
+                response: error.response?.data,
+                status: error.response?.status
+              });
+              // Don't show error toast here - let the receipt handler try again
+            }
+          }
+        },
+        onError: (error: any) => {
+          console.error('[CreateMarketSidebar] ❌ writeContract error:', error);
           toast.dismiss();
-          toast.error(error.message || 'Failed to create escrow payment');
+          
+          // Provide user-friendly error messages
+          let errorMessage = 'Failed to send payment';
+          if (error?.message?.includes('transfer amount exceeds balance') || 
+              error?.message?.includes('exceeds balance')) {
+            errorMessage = `Insufficient balance. You don't have enough ${selectedToken.symbol} to send this amount.`;
+          } else if (error?.message?.includes('user rejected') || 
+                     error?.message?.includes('User rejected')) {
+            errorMessage = 'Transaction was cancelled';
+          } else if (error?.message) {
+            errorMessage = error.message;
+          }
+          
+          toast.error(errorMessage);
           setLoading(false);
           setStep('form');
         }
       });
     } catch (error: any) {
       toast.dismiss();
-      console.error('Error creating escrow payment:', error);
-      toast.error(error.message || 'Failed to create escrow payment');
+      console.error('Error in payment flow:', error);
+      toast.error(error.message || 'Failed to send payment');
       setLoading(false);
       setStep('form');
     }
@@ -619,17 +620,17 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
     let requesterAddress: string;
     
     if (isSolana) {
-      // For Solana, need to connect to Phantom wallet
+      // For Solana, need to connect to Solana wallet
       if (typeof window.solana === 'undefined') {
-        toast.error('Please install Phantom wallet for Solana payments');
+        toast.error('No Solana wallet detected. Please install a Solana-compatible wallet like Phantom, MetaMask, or Coinbase Wallet.');
         return;
       }
       
       try {
         setLoading(true);
-        toast.loading('Connecting to Phantom wallet...');
+        toast.loading('Connecting to Solana wallet...');
         
-        // Connect to Phantom wallet
+        // Connect to Solana wallet (works with Phantom, MetaMask, Coinbase, etc.)
         const response = await window.solana.connect();
         requesterAddress = response.publicKey.toString();
         
@@ -637,9 +638,9 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
       } catch (error: any) {
         toast.dismiss();
         if (error.code === 4001) {
-          toast.error('Phantom connection rejected');
+          toast.error('Solana wallet connection rejected');
         } else {
-          toast.error('Failed to connect Phantom wallet');
+          toast.error('Failed to connect Solana wallet');
         }
         setLoading(false);
         return;
@@ -799,7 +800,9 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
           </div>
-          <h4 className="text-base font-bold mb-0.5">Request Posted!</h4>
+          <h4 className="text-base font-bold mb-0.5">
+            {mode === 'pay' ? 'Payment Sent!' : 'Request Posted!'}
+          </h4>
           <p className="text-xs text-gray-600">Refreshing...</p>
         </div>
       ) : (
@@ -874,7 +877,7 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
                   
                   // Show dropdown immediately when typing (will be populated by useEffect)
                   const cleanValue = value.replace(/^@+/, '').trim();
-                  if (cleanValue.length >= 1 && !selectedRecipient && mode === 'request') {
+                  if (cleanValue.length >= 1 && !selectedRecipient) {
                     setShowSearchResults(true);
                     // Also trigger search immediately if we have enough characters
                     if (cleanValue.length >= 1) {
@@ -932,11 +935,11 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
                 </button>
               )}
               
-              {/* Search Results Dropdown - Show when typing in request mode */}
+              {/* Search Results Dropdown - Show when typing in both request and pay modes */}
               {(() => {
                 const cleanTo = formData.to.replace(/^@+/, '').trim();
                 const hasText = cleanTo.length >= 1;
-                const shouldShow = hasText && !selectedRecipient && mode === 'request';
+                const shouldShow = hasText && !selectedRecipient && (mode === 'request' || mode === 'pay') && showSearchResults;
                 
                 // Debug logging - always log when there's text
                 if (hasText) {
@@ -1008,14 +1011,64 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
                             // Prevent blur from firing before click
                             e.preventDefault();
                           }}
-                          onClick={() => {
-                            setSelectedRecipient({
-                              id: user.id,
-                              username: user.username || '',
-                              displayName: displayName
-                            });
-                            setFormData({ ...formData, to: user.username || '' });
-                            setShowSearchResults(false);
+                          onClick={async () => {
+                            // For REQUEST mode: We don't need wallet address, just set the recipient
+                            // For PAY mode: We need to fetch preferred wallet address for the selected chain
+                            if (mode === 'request') {
+                              // Just set the recipient - no wallet address needed for requests
+                              setSelectedRecipient({
+                                id: user.id,
+                                username: user.username || '',
+                                displayName: displayName,
+                                walletAddress: undefined // Not needed for requests
+                              });
+                              setFormData({ ...formData, to: user.username || '' });
+                              setShowSearchResults(false);
+                              return;
+                            }
+                            
+                            // For PAY mode: Fetch preferred wallet address for the selected chain
+                            if (mode === 'pay') {
+                              try {
+                                setLoading(true);
+                                
+                                // Get the chain ID for the current selection
+                                const targetChainId = formData.chainId;
+                                
+                                // Fetch preferred wallets for this user
+                                const response = await axios.get(`${API_URL}/preferred-wallets/user/${user.id}`);
+                                const preferredWallets = response.data || [];
+                                
+                                // Find wallet for the selected chain
+                                const chainWallet = preferredWallets.find((w: any) => {
+                                  const wChainId = String(w.chain_id).toLowerCase();
+                                  const targetChainIdStr = String(targetChainId).toLowerCase();
+                                  return wChainId === targetChainIdStr;
+                                });
+                                
+                                if (!chainWallet || !chainWallet.receiving_wallet_address) {
+                                  const chainName = getChainConfig(targetChainId as number)?.name || 'this chain';
+                                  toast.error(`User does not have a preferred wallet for ${chainName}. They need to set it up first.`);
+                                  setLoading(false);
+                                  return;
+                                }
+                                
+                                setSelectedRecipient({
+                                  id: user.id,
+                                  username: user.username || '',
+                                  displayName: displayName,
+                                  walletAddress: chainWallet.receiving_wallet_address
+                                });
+                                setFormData({ ...formData, to: user.username || '' });
+                                setShowSearchResults(false);
+                                setLoading(false);
+                              } catch (error: any) {
+                                console.error('Error fetching preferred wallet:', error);
+                                toast.error(error.response?.data?.error || 'Could not find wallet address for this user');
+                                setLoading(false);
+                                return;
+                              }
+                            }
                           }}
                           className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 flex items-center gap-3"
                         >
@@ -1099,37 +1152,6 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
             )}
           </div>
 
-          {/* Gas Fee Display - Only for Pay mode */}
-          {mode === 'pay' && isConnected && formData.amount && parseFloat(formData.amount) > 0 && selectedToken && escrowAddress && chainIdNum !== null && typeof chainIdNum === 'number' && !isNaN(chainIdNum) && (
-            <div className="mb-4">
-              <GasFeeDisplay
-                chainId={chainIdNum}
-                tokenSymbol={formData.tokenSymbol}
-                amount={formData.amount}
-                onTotalAmountChange={setTotalGasFee}
-              />
-              {needsApproval && (
-                <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-800">
-                  <div className="flex items-center gap-1.5">
-                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    <span>Token approval required. This will require an additional gas fee.</span>
-                  </div>
-                </div>
-              )}
-              {chainIdNum === 1 && (
-                <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded-lg text-xs text-orange-800">
-                  <div className="flex items-center gap-1.5">
-                    <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    </svg>
-                    <span>Ethereum gas fees are high. Consider using Base or Polygon for lower costs.</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Bottom Section - Info, Button */}
           <div className="pt-3 space-y-3">
@@ -1187,4 +1209,5 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
     </div>
   );
 }
+
 

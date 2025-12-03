@@ -47,7 +47,12 @@ export default function PayRequestPage() {
 
   const handleSuccess = () => {
     // Refresh or redirect after successful payment/request
-    router.push('/feed');
+    // Add a small delay to ensure backend has processed the payment send
+    setTimeout(() => {
+      router.push('/feed');
+      // Force a refresh when navigating to feed
+      router.refresh();
+    }, 1000);
   };
 
   if (loading) {

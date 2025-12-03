@@ -452,11 +452,12 @@ export function getChainConfig(chainId: number | string): ChainConfig | undefine
   return CHAINS[chainId];
 }
 
-// Available chains for selection - Only these 4 chains are supported
+// Available chains for selection
 export const AVAILABLE_CHAINS = [
   { id: 8453, name: 'Base' },
   { id: 1, name: 'Ethereum' },
   { id: 56, name: 'BNB Chain' },
-  { id: 137, name: 'Polygon' }
+  { id: 137, name: 'Polygon' },
+  { id: 'solana', name: 'Solana' }
 ];
 

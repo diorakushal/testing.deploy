@@ -39,7 +39,7 @@ export default function DocumentationModal({ isOpen, onClose }: DocumentationMod
               <h3 className="text-lg font-bold text-black mb-3">Overview</h3>
               <p className="text-gray-700 leading-relaxed text-sm">
                 Xelli is a non-custodial cryptocurrency payment platform that enables seamless wallet-to-wallet transactions. 
-                Create payment requests, send payments via escrow, and manage your crypto payments across multiple blockchain networks.
+                Create payment requests, send direct payments, and manage your crypto payments across multiple blockchain networks.
               </p>
             </section>
 
@@ -79,9 +79,9 @@ export default function DocumentationModal({ isOpen, onClose }: DocumentationMod
                   </p>
                 </div>
                 <div className="p-4 border border-gray-200">
-                  <h4 className="font-semibold text-black mb-2">Escrow Payments</h4>
+                  <h4 className="font-semibold text-black mb-2">Direct Payments</h4>
                   <p className="text-gray-700 text-sm">
-                    Send payments via smart contract escrow. Funds are held securely until the recipient accepts.
+                    Send payments directly to recipient wallets. Instant transfers with no escrow delays.
                   </p>
                 </div>
                 <div className="p-4 border border-gray-200">
@@ -134,8 +134,8 @@ export default function DocumentationModal({ isOpen, onClose }: DocumentationMod
                   <div>
                     <h4 className="font-semibold text-black mb-1">Send Payments</h4>
                     <p className="text-gray-700 text-sm">
-                      Use "Pay & Request" → "Pay" tab to send payments via escrow. Enter recipient @username, amount, 
-                      and optional note. Funds are held in escrow until the recipient accepts.
+                      Use "Pay & Request" → "Pay" tab to send direct payments. Enter recipient @username, amount, 
+                      and optional note. Payments are sent instantly to the recipient's wallet.
                     </p>
                   </div>
                 </div>
@@ -183,9 +183,9 @@ export default function DocumentationModal({ isOpen, onClose }: DocumentationMod
               <h3 className="text-lg font-bold text-black mb-3">Security & Privacy</h3>
               <div className="space-y-2 text-gray-700 text-sm">
                 <p><strong>Non-custodial:</strong> We never hold your funds. All transactions are wallet-to-wallet.</p>
-                <p><strong>Smart Contract Escrow:</strong> Payments are secured by audited smart contracts.</p>
+                <p><strong>Direct Transfers:</strong> Payments are sent directly wallet-to-wallet using standard ERC-20 transfers.</p>
                 <p><strong>Private Keys:</strong> Your private keys never leave your wallet. We never have access to them.</p>
-                <p><strong>User Control:</strong> You can cancel escrow payments if the recipient doesn't accept them.</p>
+                <p><strong>Instant Settlement:</strong> Payments are completed immediately upon transaction confirmation.</p>
               </div>
             </section>
 

@@ -6,7 +6,6 @@ import toast from 'react-hot-toast';
 import { formatUnits, parseUnits, Address, isAddress } from 'viem';
 import { useAccount, useChainId, useSwitchChain, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { getChainConfig, getToken } from '@/lib/tokenConfig';
-import { calculateFinalGasFee } from '@/lib/gasFeeCalculator';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -42,7 +41,7 @@ interface PaymentRequestCardProps {
     amount: string | number;
     token_symbol: string;
     token_address: string;
-    chain_id: number;
+    chain_id: number | string; // Supports string for Solana
     chain_name: string;
     caption: string | null;
     status: string;
@@ -72,7 +71,9 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
   const { writeContract, data: hash, isPending, error } = useWriteContract();
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ 
     hash,
-    enabled: !!hash 
+    query: {
+      enabled: !!hash 
+    }
   });
   
   console.log('[PaymentRequestCard] 🔗 Wagmi hooks state', {
@@ -90,10 +91,7 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
   const [hasMarkedPaid, setHasMarkedPaid] = useState(false);
   const [localPaidStatus, setLocalPaidStatus] = useState(false);
   const [localTxHash, setLocalTxHash] = useState<string | null>(null);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
-  const [finalGasFee, setFinalGasFee] = useState<{ feeInToken: number; feeInUSD: number; feeInNative: string } | null>(null);
-  const [isCalculatingGas, setIsCalculatingGas] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const isPaid = localPaidStatus || request.status === 'paid';
   const isOpen = request.status === 'open' && !localPaidStatus;
@@ -190,7 +188,7 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
   const handleAccept = async () => {
     // Check if Solana (requires different handling)
     if (request.chain_id === 'solana' || String(request.chain_id) === 'solana') {
-      toast.error('Solana payments require Phantom wallet. Coming soon!');
+      toast.error('Solana payments require a Solana-compatible wallet. Please connect a wallet that supports Solana.');
       return;
     }
     
@@ -221,15 +219,10 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
       return;
     }
 
-    // Calculate FINAL gas fee right now (Step 2 - Final Calculation)
     try {
-      setIsCalculatingGas(true);
-      toast.loading('Calculating final gas fee...');
-
       const chainConfig = getChainConfig(chainIdNum);
       if (!chainConfig) {
         toast.error('Unsupported chain');
-        setIsCalculatingGas(false);
         return;
       }
 
@@ -241,7 +234,6 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
           if (switchChain) {
             try {
               await switchChain({ chainId: chainIdNum as any });
-              // Reduced delay - just wait for chain switch confirmation
               await new Promise(resolve => setTimeout(resolve, 1000));
             } catch (switchError: any) {
               if (window.ethereum) {
@@ -255,7 +247,6 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
                     blockExplorerUrls: [chainConfig.explorer]
                   }]
                 });
-                // Reduced delays
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 await switchChain({ chainId: chainIdNum as any });
                 await new Promise(resolve => setTimeout(resolve, 1000));
@@ -268,7 +259,6 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
           toast.dismiss();
           console.error('[PaymentRequestCard] ❌ Chain switch error:', switchError);
           toast.error('Failed to switch network. Please switch manually in your wallet.');
-          setIsCalculatingGas(false);
           return;
         }
       }
@@ -278,122 +268,15 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
       const decimals = token?.decimals || 6;
       const amountInWei = parseUnits(request.amount.toString(), decimals);
 
-      console.log('[PaymentRequestCard] ⛽ Starting gas calculation', {
-        chainId: chainIdNum,
-        tokenSymbol: request.token_symbol,
-        amount: request.amount
-      });
-      
-      toast.loading('Calculating gas fee...', { duration: 15000 });
-      
-      // STEP 2: Calculate FINAL gas fee with latest network prices
-      // Reduced timeout - will use fallback values if network is slow
-      const gasFeeResult = await Promise.race([
-        calculateFinalGasFee({
-          chainId: chainIdNum,
-          tokenAddress: request.token_address as Address,
-          tokenSymbol: request.token_symbol,
-          tokenDecimals: decimals,
-          recipient: request.requester_address as Address,
-          amount: amountInWei,
-          fromAddress: address as Address
-        }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Gas calculation timeout - using estimated values')), 15000)
-        )
-      ]) as any;
-      
-      console.log('[PaymentRequestCard] ✅ Gas calculation complete', {
-        feeInToken: gasFeeResult.feeInToken,
-        feeInUSD: gasFeeResult.feeInUSD
-      });
-
-      setFinalGasFee({
-        feeInToken: gasFeeResult.feeInToken,
-        feeInUSD: gasFeeResult.feeInUSD,
-        feeInNative: gasFeeResult.feeInNative
-      });
-
-      setIsCalculatingGas(false);
-      toast.dismiss();
-      
-      // Check if we used fallback values (check console for warnings)
-      // If the fee seems unusually high or low, it might be using fallback
-      // But we'll proceed anyway since we have valid estimates
-      
-      // Show confirmation modal with final gas fee
-      setShowConfirmModal(true);
-    } catch (error: any) {
-      setIsCalculatingGas(false);
-      toast.dismiss();
-      console.error('Error calculating gas fee:', error);
-      
-      // Show user-friendly error messages
-      let errorMessage = 'Failed to calculate gas fee';
-      if (error.message?.includes('timeout')) {
-        errorMessage = 'Network request timed out. Please check your connection and try again.';
-      } else if (error.message?.includes('RPC')) {
-        errorMessage = 'Unable to connect to blockchain network. Please try again in a moment.';
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      toast.error(errorMessage);
-    }
-  };
-
-  // Step 2: Execute transaction with final gas fee (use already calculated fee)
-  const handleConfirmPayment = async () => {
-    if (!address || !finalGasFee) {
-      console.error('[PaymentRequestCard] ❌ Cannot confirm payment - missing address or gas fee');
-      return;
-    }
-
-    const chainIdNum = typeof request.chain_id === 'string' ? parseInt(request.chain_id) : request.chain_id;
-    
-    console.log('[PaymentRequestCard] 💳 Confirming payment', {
-      requestId: request.id,
-      amount: request.amount,
-      tokenSymbol: request.token_symbol,
-      chainId: chainIdNum
-    });
-    
-    try {
       setIsProcessing(true);
-      setShowConfirmModal(false);
       toast.loading('Sending payment...');
 
-      // Use the already calculated gas fee - no need to recalculate (saves time)
-      // The gas fee was calculated right before showing the modal, so it's still fresh
-      const finalGasFeeResult = finalGasFee;
-      console.log('[PaymentRequestCard] ⛽ Using pre-calculated gas fee', {
-        feeInToken: finalGasFeeResult.feeInToken,
-        feeInUSD: finalGasFeeResult.feeInUSD
-      });
-
-      // Validate token address
-      if (!isAddress(request.token_address)) {
-        toast.error('Invalid token address');
-        setIsProcessing(false);
-        return;
-      }
-
-      // Get token decimals
-      const token = getToken(request.token_symbol, chainIdNum);
-      const decimals = token?.decimals || 6;
-      const amountInWei = parseUnits(request.amount.toString(), decimals);
-
-      // Send ERC20 transfer with final gas parameters
+      // Send ERC20 transfer - wallet will handle gas calculations
       writeContract({
         address: request.token_address as Address,
         abi: ERC20_ABI,
         functionName: 'transfer',
-        args: [request.requester_address as Address, amountInWei],
-        // Use final gas fee if available (for EIP-1559 chains)
-        ...(finalGasFeeResult?.maxFeePerGas && finalGasFeeResult?.maxPriorityFeePerGas ? {
-          maxFeePerGas: finalGasFeeResult.maxFeePerGas,
-          maxPriorityFeePerGas: finalGasFeeResult.maxPriorityFeePerGas,
-        } : {})
+        args: [request.requester_address as Address, amountInWei]
       }, {
         onError: (error) => {
           toast.dismiss();
@@ -404,7 +287,7 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
       });
     } catch (error: any) {
       toast.dismiss();
-      console.error('Error confirming payment:', error);
+      console.error('Error processing payment:', error);
       toast.error(error.message || 'Failed to process payment');
       setIsProcessing(false);
     }
@@ -618,7 +501,7 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
     };
   }, [isSuccess, hash, isPaid, hasMarkedPaid, address, request.id, onPaymentSuccess, localPaidStatus, localTxHash, request.status, request.chain_id]);
 
-  const isLoading = isPending || isConfirming || isProcessing || isCalculatingGas;
+  const isLoading = isPending || isConfirming || isProcessing;
 
   // Debug logging for state changes (placed after isLoading is defined)
   useEffect(() => {
@@ -637,9 +520,8 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
       isLoading,
       isPending,
       isConfirming,
-      isCalculatingGas
     });
-  }, [request.id, request.status, localPaidStatus, localTxHash, isPaid, isOpen, hasMarkedPaid, isSuccess, hash, address, isProcessing, isLoading, isPending, isConfirming, isCalculatingGas]);
+  }, [request.id, request.status, localPaidStatus, localTxHash, isPaid, isOpen, hasMarkedPaid, isSuccess, hash, address, isProcessing, isLoading, isPending, isConfirming]);
 
   return (
     <>
@@ -697,86 +579,6 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
         </div>
       )}
 
-      {/* Confirmation Modal with Final Gas Fee */}
-      {showConfirmModal && finalGasFee && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-900">Confirm Payment</h3>
-              <button
-                onClick={() => {
-                  setShowConfirmModal(false);
-                  setFinalGasFee(null);
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Payment amount:</span>
-                  <span className="font-semibold text-gray-900">
-                    {formatAmount(request.amount)} {request.token_symbol}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Network Fee:</span>
-                  <span className="font-semibold text-gray-900">
-                    {finalGasFee.feeInNative} {getChainConfig(typeof request.chain_id === 'string' ? parseInt(request.chain_id) : request.chain_id)?.nativeCurrency.symbol || 'ETH'}
-                  </span>
-                </div>
-                <div className="text-xs text-gray-500">
-                  (~${finalGasFee.feeInUSD.toFixed(4)} USD)
-                </div>
-                <div className="border-t border-gray-200 pt-2 flex justify-between text-sm font-semibold">
-                  <span className="text-gray-900">You will send:</span>
-                  <span className="text-gray-900">
-                    {formatAmount(request.amount)} {request.token_symbol}
-                  </span>
-                </div>
-                <div className="text-xs text-gray-500 text-right">
-                  Gas is paid separately in {getChainConfig(typeof request.chain_id === 'string' ? parseInt(request.chain_id) : request.chain_id)?.nativeCurrency.symbol || 'ETH'}
-                </div>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <div className="flex items-start gap-2">
-                  <svg className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <p className="text-xs text-blue-800">
-                    <strong>Final gas fee calculated.</strong> This is the most up-to-date fee based on current network conditions. The transaction will use these exact values.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => {
-                  setShowConfirmModal(false);
-                  setFinalGasFee(null);
-                }}
-                className="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmPayment}
-                disabled={isProcessing}
-                className="flex-1 px-4 py-2 rounded-lg bg-black text-white text-sm font-semibold hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isProcessing ? 'Processing...' : 'Confirm & Pay'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="bg-white flex flex-col border-b border-gray-200 hover:bg-gray-50/50 transition-colors">
       <div className="px-6 py-5">
@@ -887,15 +689,7 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
                         disabled={isLoading || !isConnected}
                         className="px-5 py-2 rounded-full text-xs font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-black text-white hover:bg-gray-800 active:scale-[0.98] shadow-sm hover:shadow-md"
                       >
-                        {isCalculatingGas ? (
-                          <span className="flex items-center gap-2">
-                            <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Calculating fee...
-                          </span>
-                        ) : isLoading ? (
+                        {isLoading ? (
                           <span className="flex items-center gap-2">
                             <svg className="animate-spin h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

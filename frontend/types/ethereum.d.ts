@@ -10,6 +10,9 @@ interface SolanaProvider {
   disconnect(): Promise<void>;
   isConnected: boolean;
   publicKey?: { toString(): string };
+  isPhantom?: boolean; // Phantom-specific
+  isMetaMask?: boolean; // MetaMask with Solana support
+  isCoinbaseWallet?: boolean; // Coinbase Wallet with Solana support
 }
 
 interface Window {
