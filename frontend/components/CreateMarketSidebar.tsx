@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import { AVAILABLE_CHAINS, getTokensForChain, getToken, getChainConfig, type TokenConfig } from '@/lib/tokenConfig';
 import { supabase } from '@/lib/supabase';
 import { getUserGradient, getUserInitials, getAvatarStyle } from '@/lib/userAvatar';
+import UserAvatar from '@/components/UserAvatar';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -1116,19 +1117,16 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
                           }}
                           className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 flex items-center gap-3"
                         >
-                          {/* Avatar with gradient background - matching image style */}
-                          {(() => {
-                            const gradient = getUserGradient(user.id);
-                            const userInitials = getUserInitials(user.first_name, user.last_name, user.username, user.email);
-                            return (
-                              <div 
-                                className="inline-block w-10 h-10 rounded-full flex items-center justify-center text-white font-medium text-sm flex-shrink-0"
-                                style={getAvatarStyle(gradient)}
-                              >
-                                {userInitials}
-                              </div>
-                            );
-                          })()}
+                          {/* Avatar - uses profile_image_url from database */}
+                          <UserAvatar
+                            userId={user.id}
+                            firstName={user.first_name}
+                            lastName={user.last_name}
+                            username={user.username}
+                            email={user.email}
+                            profileImageUrl={user.profile_image_url}
+                            size="md"
+                          />
                           
                           {/* Text content - display name on top, username below */}
                           <div className="flex-1 min-w-0">

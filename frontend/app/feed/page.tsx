@@ -88,6 +88,14 @@ export default function Feed() {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const fetchingRef = useRef(false);
   const initialLoadRef = useRef(false);
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const checkingAuthRef = useRef(checkingAuth);
+  const hasCheckedAuthRef = useRef(false);
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    checkingAuthRef.current = checkingAuth;
+  }, [checkingAuth]);
   
   // Use wagmi to get wallet connection state
   const { address: connectedAddress, isConnected } = useAccount();
@@ -193,6 +201,16 @@ export default function Feed() {
       // Only show loading on initial load or when explicitly requested
       if (showLoading || !initialLoadRef.current) {
         setLoading(true);
+        
+        // Set a safety timeout to ensure loading state is reset even if fetch hangs
+        if (loadingTimeoutRef.current) {
+          clearTimeout(loadingTimeoutRef.current);
+        }
+        loadingTimeoutRef.current = setTimeout(() => {
+          console.warn('[Feed] Fetch timeout - resetting loading state');
+          setLoading(false);
+          fetchingRef.current = false;
+        }, 30000); // 30 second timeout
       }
       console.log('[Feed] Starting to fetch payment requests...');
       
@@ -242,6 +260,11 @@ export default function Feed() {
         setPaymentRequests(sortedRequests);
         setLoading(false); // Set loading to false immediately after setting data
         initialLoadRef.current = true; // Mark initial load as complete
+        // Clear timeout since fetch completed successfully
+        if (loadingTimeoutRef.current) {
+          clearTimeout(loadingTimeoutRef.current);
+          loadingTimeoutRef.current = null;
+        }
       } else {
         // No user ID - fetch all (shouldn't happen if authenticated)
         console.log('No user ID, fetching all payment requests');
@@ -261,6 +284,11 @@ export default function Feed() {
         }
         setLoading(false); // Set loading to false after setting data
         initialLoadRef.current = true; // Mark initial load as complete
+        // Clear timeout since fetch completed successfully
+        if (loadingTimeoutRef.current) {
+          clearTimeout(loadingTimeoutRef.current);
+          loadingTimeoutRef.current = null;
+        }
       }
     } catch (error: any) {
       console.error('Error fetching payment requests:', error);
@@ -275,24 +303,83 @@ export default function Feed() {
       console.log('API failed, showing empty state');
       setPaymentRequests([]);
       setLoading(false); // Always set loading to false on error
+      // Clear timeout on error
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
     } finally {
       // Ensure loading is always set to false and ref is cleared
       setLoading(false);
       fetchingRef.current = false;
+      // Clear timeout in finally block as well
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
     }
   }, []);
 
   // CRITICAL: Authentication check - DO NOT remove this
   useEffect(() => {
     let mounted = true;
+    let authTimeout: NodeJS.Timeout | null = null;
+    
+    // Reset auth check ref when pathname changes (new navigation)
+    // This ensures we check auth again when navigating to this page
+    if (pathname === '/feed') {
+      hasCheckedAuthRef.current = false;
+    }
     
     // Check authentication - REQUIRED for this page
     const checkAuth = async () => {
+      // If we already checked auth recently and have a user, skip the check
+      if (hasCheckedAuthRef.current && user) {
+        setCheckingAuth(false);
+        return;
+      }
+      
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        // First try to get session from cache (faster, doesn't hang)
+        const cachedSession = await supabase.auth.getSession();
+        if (cachedSession.data?.session) {
+          if (mounted) {
+            setUser(cachedSession.data.session.user);
+            setCheckingAuth(false);
+            hasCheckedAuthRef.current = true;
+            // Fetch payment requests and sends after auth is confirmed
+            if (!initialLoadRef.current) {
+              fetchPaymentRequests(true);
+            } else {
+              fetchPaymentRequests(false);
+            }
+            fetchPaymentSends();
+            return;
+          }
+        }
+        
+        // If no cached session, do a fresh check with timeout
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((_, reject) => {
+          authTimeout = setTimeout(() => {
+            reject(new Error('Auth check timeout'));
+          }, 2000); // Reduced to 2 second timeout for faster response
+        });
+        
+        const { data: { session } } = await Promise.race([
+          sessionPromise,
+          timeoutPromise
+        ]) as { data: { session: any } };
+        
+        if (authTimeout) {
+          clearTimeout(authTimeout);
+          authTimeout = null;
+        }
+        
         if (!session) {
           if (mounted) {
             setCheckingAuth(false);
+            hasCheckedAuthRef.current = false;
             router.push('/login');
           }
           return;
@@ -300,6 +387,16 @@ export default function Feed() {
         if (mounted) {
           setUser(session.user);
           setCheckingAuth(false); // Set this first so component can render
+          hasCheckedAuthRef.current = true;
+          
+          // Ensure user record exists in public.users table (non-blocking)
+          // Don't await - let it run in background so it doesn't block rendering
+          const { ensureUserRecord } = await import('@/lib/auth-utils');
+          ensureUserRecord(session.user).catch(err => {
+            console.error('[Feed] Background ensureUserRecord failed:', err);
+            // Non-critical, don't block UI
+          });
+          
           // Fetch payment requests and sends after auth is confirmed
           // Only show loading on initial load
           if (!initialLoadRef.current) {
@@ -311,14 +408,65 @@ export default function Feed() {
         }
       } catch (error) {
         console.error('Error checking auth:', error);
+        if (authTimeout) {
+          clearTimeout(authTimeout);
+          authTimeout = null;
+        }
+        // On timeout or error, try to get cached session
         if (mounted) {
-          setCheckingAuth(false);
-          router.push('/login');
+          try {
+            // Quick check from cache
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+              setUser(session.user);
+              setCheckingAuth(false);
+              hasCheckedAuthRef.current = true;
+              
+              // Ensure user record exists in public.users table (non-blocking)
+              const { ensureUserRecord } = await import('@/lib/auth-utils');
+              ensureUserRecord(session.user).catch(err => {
+                console.error('[Feed] Background ensureUserRecord failed:', err);
+              });
+              
+              if (!initialLoadRef.current) {
+                fetchPaymentRequests(true);
+              } else {
+                fetchPaymentRequests(false);
+              }
+              fetchPaymentSends();
+            } else {
+              setCheckingAuth(false);
+              hasCheckedAuthRef.current = false;
+              router.push('/login');
+            }
+          } catch (retryError) {
+            console.error('Retry auth check failed:', retryError);
+            setCheckingAuth(false);
+            hasCheckedAuthRef.current = false;
+            // Don't redirect on error - might be network issue
+          }
         }
       }
     };
 
     checkAuth();
+    
+    // Safety timeout: Force checkingAuth to false after 5 seconds
+    // This prevents infinite loading if auth check hangs
+    const safetyTimeout = setTimeout(() => {
+      if (mounted && checkingAuthRef.current) {
+        console.warn('[Feed] Auth check safety timeout - forcing checkingAuth to false');
+        setCheckingAuth(false);
+        // If we have a user from cache, use it
+        if (!user) {
+          supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session && mounted) {
+              setUser(session.user);
+            }
+          });
+        }
+      }
+    }, 5000);
 
     // Listen for auth changes - REQUIRED - DO NOT remove
     // Only refetch if session actually changes (not on every event)
@@ -348,23 +496,106 @@ export default function Feed() {
     return () => {
       mounted = false;
       subscription.unsubscribe();
+      // Clear any pending timeouts
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+      if (authTimeout) {
+        clearTimeout(authTimeout);
+        authTimeout = null;
+      }
+      clearTimeout(safetyTimeout);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router]); // Only depend on router - fetch functions are stable with useCallback
+  }, [router, pathname]); // Include pathname to detect navigation
 
-  // Refresh on focus (when user navigates back to the page)
+  // Refresh on focus/visibility change (when user navigates back to the page or switches tabs)
   useEffect(() => {
-    const handleFocus = () => {
-      console.log('[Feed] Page focused, refreshing payment sends and requests');
-      // Don't show loading spinner on focus refresh
-      fetchPaymentSends();
-      fetchPaymentRequests(false);
+    const handleVisibilityChange = async () => {
+      // When page becomes visible again, clear any stuck states and retry
+      if (document.visibilityState === 'visible') {
+        console.log('[Feed] Page became visible, clearing stuck states and refreshing data');
+        
+        // Clear stuck fetching state to allow retry
+        fetchingRef.current = false;
+        
+        // Reset loading state if fetch is stuck
+        // This handles cases where a fetch was interrupted by tab switching
+        setLoading((prevLoading) => {
+          if (prevLoading) {
+            console.log('[Feed] Loading state was stuck, resetting...');
+          }
+          return false;
+        });
+        
+        // If checkingAuth is stuck, try to quickly verify session
+        if (checkingAuthRef.current) {
+          console.log('[Feed] Auth check was stuck, retrying...');
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+              setUser(session.user);
+              setCheckingAuth(false);
+              fetchPaymentSends();
+              fetchPaymentRequests(false);
+            } else {
+              setCheckingAuth(false);
+              router.push('/login');
+            }
+          } catch (error) {
+            console.error('[Feed] Error retrying auth check:', error);
+            setCheckingAuth(false);
+          }
+        } else {
+          // Retry fetching data
+          // Don't show loading spinner on visibility refresh
+          fetchPaymentSends();
+          fetchPaymentRequests(false);
+        }
+      }
     };
 
+    const handleFocus = async () => {
+      console.log('[Feed] Window focused, refreshing payment sends and requests');
+      // Clear stuck fetching state
+      fetchingRef.current = false;
+      
+      // If checkingAuth is stuck, try to quickly verify session
+      if (checkingAuthRef.current) {
+        console.log('[Feed] Auth check was stuck on focus, retrying...');
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            setUser(session.user);
+            setCheckingAuth(false);
+            fetchPaymentSends();
+            fetchPaymentRequests(false);
+          } else {
+            setCheckingAuth(false);
+            router.push('/login');
+          }
+        } catch (error) {
+          console.error('[Feed] Error retrying auth check on focus:', error);
+          setCheckingAuth(false);
+        }
+      } else {
+        // Don't show loading spinner on focus refresh
+        fetchPaymentSends();
+        fetchPaymentRequests(false);
+      }
+    };
+
+    // Use both visibility API (for tab switching) and focus (for window switching)
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run once on mount - functions are stable
+  }, []); // Only run once on mount - use refs to access current state
 
   // Refresh data when navigating to this page (pathname changes to /feed)
   useEffect(() => {

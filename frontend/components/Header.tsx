@@ -14,6 +14,7 @@ import TermsModal from '@/components/TermsModal';
 import SettingsModal from '@/components/SettingsModal';
 import PreferredWalletsModal from '@/components/PreferredWalletsModal';
 import { getUserGradient, getUserInitials, getAvatarStyle } from '@/lib/userAvatar';
+import UserAvatar from '@/components/UserAvatar';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -185,21 +186,42 @@ export default function Header({ onWalletConnect }: HeaderProps) {
           setUser(session.user);
           setCurrentUserId(session.user.id);
           
-          // Fetch user profile from users table
-          const { data: profile, error } = await supabase
-            .from('users')
-            .select('first_name, last_name, username')
-            .eq('id', session.user.id)
-            .single();
-          
-          if (!error && profile) {
-            setUserProfile(profile);
-          } else {
-            // Fallback to user_metadata if profile not found
+          // Fetch user profile from users table (with timeout)
+          try {
+            const profilePromise = supabase
+              .from('users')
+              .select('first_name, last_name, username, profile_image_url')
+              .eq('id', session.user.id)
+              .single();
+            
+            const profileTimeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => reject(new Error('Profile fetch timeout')), 3000);
+            });
+            
+            const { data: profile, error } = await Promise.race([
+              profilePromise,
+              profileTimeoutPromise
+            ]) as { data: any; error: any };
+            
+            if (!error && profile) {
+              setUserProfile(profile);
+            } else {
+              // Fallback to user_metadata if profile not found
+              setUserProfile({
+                first_name: session.user.user_metadata?.first_name || '',
+                last_name: session.user.user_metadata?.last_name || '',
+                username: session.user.user_metadata?.username || '',
+                profile_image_url: session.user.user_metadata?.profile_image_url || null,
+              });
+            }
+          } catch (profileError) {
+            // On timeout or error, use fallback
+            console.error('[Header] Profile fetch error:', profileError);
             setUserProfile({
               first_name: session.user.user_metadata?.first_name || '',
               last_name: session.user.user_metadata?.last_name || '',
               username: session.user.user_metadata?.username || '',
+              profile_image_url: session.user.user_metadata?.profile_image_url || null,
             });
           }
         }
@@ -218,21 +240,48 @@ export default function Header({ onWalletConnect }: HeaderProps) {
         setUser(session.user);
         setCurrentUserId(session.user.id);
         
-        // Fetch user profile from users table
-        const { data: profile, error } = await supabase
-          .from('users')
-          .select('first_name, last_name, username')
-          .eq('id', session.user.id)
-          .single();
+        // Ensure user record exists in public.users table (non-blocking)
+        const { ensureUserRecord } = await import('@/lib/auth-utils');
+        ensureUserRecord(session.user).catch(err => {
+          console.error('[Header] Background ensureUserRecord failed:', err);
+        });
         
-        if (!error && profile) {
-          setUserProfile(profile);
-        } else {
-          // Fallback to user_metadata if profile not found
+        // Fetch user profile from users table (with timeout)
+        try {
+          const profilePromise = supabase
+            .from('users')
+            .select('first_name, last_name, username, profile_image_url')
+            .eq('id', session.user.id)
+            .single();
+          
+          const profileTimeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Profile fetch timeout')), 3000);
+          });
+          
+          const { data: profile, error } = await Promise.race([
+            profilePromise,
+            profileTimeoutPromise
+          ]) as { data: any; error: any };
+          
+          if (!error && profile) {
+            setUserProfile(profile);
+          } else {
+            // Fallback to user_metadata if profile not found
+            setUserProfile({
+              first_name: session.user.user_metadata?.first_name || '',
+              last_name: session.user.user_metadata?.last_name || '',
+              username: session.user.user_metadata?.username || '',
+              profile_image_url: session.user.user_metadata?.profile_image_url || null,
+            });
+          }
+        } catch (profileError) {
+          // On timeout or error, use fallback
+          console.error('[Header] Profile fetch error in onAuthStateChange:', profileError);
           setUserProfile({
             first_name: session.user.user_metadata?.first_name || '',
             last_name: session.user.user_metadata?.last_name || '',
             username: session.user.user_metadata?.username || '',
+            profile_image_url: session.user.user_metadata?.profile_image_url || null,
           });
         }
       } else {
@@ -254,7 +303,7 @@ export default function Header({ onWalletConnect }: HeaderProps) {
       // Refresh user profile from users table
       const { data: profile, error } = await supabase
         .from('users')
-        .select('first_name, last_name, username')
+        .select('first_name, last_name, username, profile_image_url')
         .eq('id', user.id)
         .single();
       
@@ -535,19 +584,16 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                             className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
                             onClick={() => handleUserSelect(user)}
                           >
-                            {/* Avatar */}
-                            {(() => {
-                              const gradient = getUserGradient(user.id);
-                              const initials = getUserInitials(user.first_name, user.last_name, user.username, user.email);
-                              return (
-                                <div 
-                                  className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0"
-                                  style={getAvatarStyle(gradient)}
-                                >
-                                  {initials}
-                                </div>
-                              );
-                            })()}
+                            {/* Avatar - uses profile_image_url from database */}
+                            <UserAvatar
+                              userId={user.id}
+                              firstName={user.first_name}
+                              lastName={user.last_name}
+                              username={user.username}
+                              email={user.email}
+                              profileImageUrl={user.profile_image_url}
+                              size="md"
+                            />
                             
                             {/* User Info */}
                             <div className="flex-1 min-w-0">
@@ -696,21 +742,18 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                     }}
                     className="flex items-center gap-2 px-3 py-2 rounded-full hover:bg-gray-50 transition-colors h-10"
                   >
-                    {/* Avatar with 3D sphere gradient */}
-                    {user && (() => {
-                      const gradient = getUserGradient(user.id, user.user_metadata);
-                      return (
-                        <div 
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold"
-                          style={{
-                            background: `radial-gradient(circle at 30% 30%, ${gradient.topLeft} 0%, ${gradient.centerRight} 50%, ${gradient.bottomLeft} 100%)`,
-                            boxShadow: 'inset 0 2px 4px rgba(255, 255, 255, 0.2), inset 0 -2px 4px rgba(0, 0, 0, 0.1)'
-                          }}
-                        >
-                          {getUserInitials()}
-                        </div>
-                      );
-                    })()}
+                    {/* Avatar - uses profile_image_url from database */}
+                    {user && (
+                      <UserAvatar
+                        userId={user.id}
+                        firstName={userProfile?.first_name}
+                        lastName={userProfile?.last_name}
+                        username={userProfile?.username}
+                        email={user.email}
+                        profileImageUrl={userProfile?.profile_image_url}
+                        size="sm"
+                      />
+                    )}
                     <div className="text-left">
                       <div className="text-sm font-semibold text-gray-900">
                         {getUserDisplayName()}

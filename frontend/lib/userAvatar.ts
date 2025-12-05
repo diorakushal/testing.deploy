@@ -164,3 +164,51 @@ export function getAvatarStyle(gradient: UserAvatarGradient): React.CSSPropertie
   };
 }
 
+/**
+ * Profile icon configuration
+ * Maps profile_image_url (0-7) to unique profile icons
+ * Each user should have a consistent icon across the app
+ */
+export interface ProfileIcon {
+  icon: string; // Emoji or icon character
+  background: string; // CSS gradient or color
+}
+
+const profileIcons: ProfileIcon[] = [
+  { icon: '👤', background: 'linear-gradient(135deg, #2952FF 0%, #001f54 100%)' }, // 0 - Brand Blue to Navy
+  { icon: '🎭', background: 'linear-gradient(135deg, #00D07E 0%, #06b6d4 100%)' }, // 1 - Brand Green to Cyan
+  { icon: '🎨', background: 'linear-gradient(135deg, #06b6d4 0%, #2952FF 100%)' }, // 2 - Cyan to Brand Blue
+  { icon: '🌟', background: 'linear-gradient(135deg, #00D07E 0%, #0891b2 100%)' }, // 3 - Brand Green to Dark Cyan
+  { icon: '🚀', background: 'linear-gradient(135deg, #2952FF 0%, #06b6d4 100%)' }, // 4 - Brand Blue to Cyan
+  { icon: '🎯', background: 'linear-gradient(135deg, #001f54 0%, #00D07E 100%)' }, // 5 - Navy to Brand Green
+  { icon: '⚡', background: 'linear-gradient(135deg, #06b6d4 0%, #00D07E 100%)' }, // 6 - Cyan to Brand Green
+  { icon: '🎪', background: 'linear-gradient(135deg, #0891b2 0%, #2952FF 100%)' }, // 7 - Dark Cyan to Brand Blue
+];
+
+/**
+ * Get profile icon based on profile_image_url (0-7)
+ * Returns null if invalid, which will fallback to gradient avatar
+ */
+export function getProfileIcon(profileImageUrl: number): ProfileIcon | null {
+  if (profileImageUrl >= 0 && profileImageUrl <= 7) {
+    return profileIcons[profileImageUrl];
+  }
+  return null;
+}
+
+/**
+ * Get default profile icon for a user based on their ID
+ * This ensures users without a profile_image_url still get a consistent icon
+ */
+export function getDefaultProfileIcon(userId: string): ProfileIcon {
+  // Generate consistent hash from user ID
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    const char = userId.charCodeAt(i);
+    hash = char + ((hash << 5) - hash);
+  }
+  // Map hash to 0-7 range
+  const index = Math.abs(hash) % profileIcons.length;
+  return profileIcons[index];
+}
+

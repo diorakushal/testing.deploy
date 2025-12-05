@@ -84,6 +84,10 @@ export default function LoginPage() {
       }
 
       if (data.user) {
+        // Ensure user record exists in public.users table
+        const { ensureUserRecord } = await import('@/lib/auth-utils');
+        await ensureUserRecord(data.user);
+        
         toast.success('Successfully logged in!');
         
         // Redirect to feed page

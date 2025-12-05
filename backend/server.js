@@ -231,7 +231,7 @@ app.get('/api/users/search', async (req, res) => {
     // Use Supabase client with ilike for case-insensitive search
     const { data, error } = await supabase
       .from('users')
-      .select('id, username, email, first_name, last_name')
+      .select('id, username, email, first_name, last_name, profile_image_url')
       .not('username', 'is', null)
       .neq('username', '')
       .ilike('username', `%${cleanSearch}%`)
@@ -243,7 +243,7 @@ app.get('/api/users/search', async (req, res) => {
       // Fallback to direct query if Supabase fails
       try {
         const result = await pool.query(
-          `SELECT id, username, email, first_name, last_name 
+          `SELECT id, username, email, first_name, last_name, profile_image_url 
            FROM users 
            WHERE username IS NOT NULL 
              AND username != ''
@@ -259,6 +259,7 @@ app.get('/api/users/search', async (req, res) => {
           email: user.email,
           first_name: user.first_name,
           last_name: user.last_name,
+          profile_image_url: user.profile_image_url,
           displayName: user.first_name && user.last_name 
             ? `${user.first_name} ${user.last_name}` 
             : user.first_name || user.email?.split('@')[0] || 'User',
@@ -287,6 +288,7 @@ app.get('/api/users/search', async (req, res) => {
       email: user.email,
       first_name: user.first_name,
       last_name: user.last_name,
+      profile_image_url: user.profile_image_url,
       displayName: user.first_name && user.last_name 
         ? `${user.first_name} ${user.last_name}` 
         : user.first_name || user.email?.split('@')[0] || 'User',

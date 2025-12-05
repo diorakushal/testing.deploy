@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
-import { getUserGradient, getUserInitials, getAvatarStyle } from '@/lib/userAvatar';
+import UserAvatar from '@/components/UserAvatar';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -16,6 +16,7 @@ interface User {
   first_name?: string | null;
   last_name?: string | null;
   email?: string | null;
+  profile_image_url?: string | null;
   markets_created: number;
   total_staked: number | string;
   total_earnings: number | string;
@@ -112,18 +113,15 @@ export default function ProfilePage() {
         {/* User Info Card */}
         <div className="bg-white rounded-xl shadow-sm p-8 mb-6">
           <div className="flex items-start gap-6">
-            {(() => {
-              const gradient = getUserGradient(user.id);
-              const initials = getUserInitials(user.first_name, user.last_name, user.username, user.email);
-              return (
-                <div 
-                  className="w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-bold"
-                  style={getAvatarStyle(gradient)}
-                >
-                  {initials}
-                </div>
-              );
-            })()}
+            <UserAvatar
+              userId={user.id}
+              firstName={user.first_name}
+              lastName={user.last_name}
+              username={user.username}
+              email={user.email}
+              profileImageUrl={user.profile_image_url}
+              size="xl"
+            />
             <div className="flex-1">
               <h2 className="text-2xl font-bold mb-2">
                 {user.username || 'Anonymous User'}

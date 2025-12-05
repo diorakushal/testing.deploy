@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import { getUserGradient, getUserInitials, getAvatarStyle } from '@/lib/userAvatar';
+import UserAvatar from '@/components/UserAvatar';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -15,6 +15,7 @@ interface User {
   email: string;
   first_name?: string;
   last_name?: string;
+  profile_image_url?: string | null;
   displayName: string;
   searchText: string;
 }
@@ -206,19 +207,16 @@ export default function SearchPage() {
                         }
                       }}
                     >
-                      {/* Avatar */}
-                      {(() => {
-                        const gradient = getUserGradient(user.id);
-                        const initials = getUserInitials(user.first_name, user.last_name, user.username, user.email);
-                        return (
-                          <div 
-                            className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold flex-shrink-0"
-                            style={getAvatarStyle(gradient)}
-                          >
-                            {initials}
-                          </div>
-                        );
-                      })()}
+                      {/* Avatar - uses profile_image_url from database */}
+                      <UserAvatar
+                        userId={user.id}
+                        firstName={user.first_name}
+                        lastName={user.last_name}
+                        username={user.username}
+                        email={user.email}
+                        profileImageUrl={user.profile_image_url}
+                        size="lg"
+                      />
                       
                       {/* User Info */}
                       <div className="flex-1 min-w-0">

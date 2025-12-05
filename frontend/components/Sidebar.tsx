@@ -9,6 +9,7 @@ import { formatEther } from 'viem';
 import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
 import { getUserGradient, getUserInitials as getInitials, getUserDisplayName as getDisplayName, getAvatarStyle } from '@/lib/userAvatar';
+import UserAvatar from '@/components/UserAvatar';
 
 interface SidebarProps {
   onWalletConnect?: (address: string) => void;
@@ -155,7 +156,7 @@ export default function Sidebar({ onWalletConnect }: SidebarProps) {
           
           const { data: profile, error } = await supabase
             .from('users')
-            .select('first_name, last_name, username')
+            .select('first_name, last_name, username, profile_image_url')
             .eq('id', session.user.id)
             .single();
           
@@ -166,6 +167,7 @@ export default function Sidebar({ onWalletConnect }: SidebarProps) {
               first_name: session.user.user_metadata?.first_name || '',
               last_name: session.user.user_metadata?.last_name || '',
               username: session.user.user_metadata?.username || '',
+              profile_image_url: session.user.user_metadata?.profile_image_url || null,
             });
           }
         }
@@ -184,7 +186,7 @@ export default function Sidebar({ onWalletConnect }: SidebarProps) {
         
         const { data: profile, error } = await supabase
           .from('users')
-          .select('first_name, last_name, username')
+          .select('first_name, last_name, username, profile_image_url')
           .eq('id', session.user.id)
           .single();
         
@@ -195,6 +197,7 @@ export default function Sidebar({ onWalletConnect }: SidebarProps) {
             first_name: session.user.user_metadata?.first_name || '',
             last_name: session.user.user_metadata?.last_name || '',
             username: session.user.user_metadata?.username || '',
+            profile_image_url: session.user.user_metadata?.profile_image_url || null,
           });
         }
       } else {
@@ -510,18 +513,18 @@ export default function Sidebar({ onWalletConnect }: SidebarProps) {
                   }}
                   className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-700/50 transition-colors"
                 >
-                  {/* Profile Icon */}
-                  {user && (() => {
-                    const gradient = getUserGradient(user.id, user.user_metadata);
-                    return (
-                      <div 
-                        className="w-12 h-12 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-                        style={getAvatarStyle(gradient)}
-                      >
-                        {getUserInitials()}
-                      </div>
-                    );
-                  })()}
+                  {/* Profile Icon - uses profile_image_url from database */}
+                  {user && (
+                    <UserAvatar
+                      userId={user.id}
+                      firstName={userProfile?.first_name}
+                      lastName={userProfile?.last_name}
+                      username={userProfile?.username}
+                      email={user.email}
+                      profileImageUrl={userProfile?.profile_image_url}
+                      size="lg"
+                    />
+                  )}
                   
                   {/* User Name and Username */}
                   <div className="flex-1 text-left min-w-0">
