@@ -54,7 +54,6 @@ export async function calculateFinalGasFee(
 
   // Create public client for the chain with multiple RPC fallbacks
   // Only supported EVM chains: Ethereum, BNB Chain, Base, Polygon
-  // Note: Solana is handled separately (not an EVM chain)
   let client;
   let nativeCoinGeckoId: string;
   let nativePrice: number = 3000; // Fallback
@@ -74,7 +73,7 @@ export async function calculateFinalGasFee(
     client = createRPCClient('https://polygon-rpc.com', polygon);
     nativeCoinGeckoId = 'matic-network';
   } else {
-    throw new Error(`Unsupported chain: ${chainId}. Supported chains: Ethereum (1), BNB Chain (56), Base (8453), Polygon (137), Solana`);
+    throw new Error(`Unsupported chain: ${chainId}. Supported chains: Ethereum (1), BNB Chain (56), Base (8453), Polygon (137)`);
   }
   
   console.log(`[GasFeeCalculator] Created RPC client for chain ${chainId}`);
@@ -104,7 +103,6 @@ export async function calculateFinalGasFee(
       'WBTC': 'wrapped-bitcoin',
       'ETH': 'ethereum',
       'BTC': 'bitcoin',
-      'SOL': 'solana',
       'BNB': 'binancecoin',
     };
     const coinGeckoId = coinGeckoIdMap[tokenSymbol] || tokenSymbol.toLowerCase();
@@ -303,7 +301,7 @@ export async function getEstimatedGasFee(
   } else if (chainId === 137) {
     client = createPublicClient({ chain: polygon, transport: http('https://polygon-rpc.com') });
   } else {
-    throw new Error(`Unsupported chain: ${chainId}. Supported chains: Ethereum (1), BNB Chain (56), Base (8453), Polygon (137), Solana`);
+    throw new Error(`Unsupported chain: ${chainId}. Supported chains: Ethereum (1), BNB Chain (56), Base (8453), Polygon (137)`);
   }
 
   const gasPrice = await client.getGasPrice();

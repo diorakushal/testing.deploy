@@ -42,7 +42,7 @@ interface PaymentRequest {
   amount: string | number;
   token_symbol: string;
   token_address: string;
-  chain_id: number | string; // Supports string for Solana
+  chain_id: number | string;
   chain_name: string;
   caption: string | null;
   status: string;

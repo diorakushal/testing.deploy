@@ -63,9 +63,6 @@ export default function PaymentSendCard({ send, userAddress }: PaymentSendCardPr
   };
 
   const getExplorerUrl = () => {
-    if (send.chain_id === 'solana') {
-      return 'https://solscan.io';
-    }
     const chainIdNum = typeof send.chain_id === 'string' ? parseInt(send.chain_id) : send.chain_id;
     return getChainConfig(chainIdNum)?.explorer || '#';
   };

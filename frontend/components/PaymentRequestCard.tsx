@@ -41,7 +41,7 @@ interface PaymentRequestCardProps {
     amount: string | number;
     token_symbol: string;
     token_address: string;
-    chain_id: number | string; // Supports string for Solana
+    chain_id: number | string;
     chain_name: string;
     caption: string | null;
     status: string;
@@ -186,11 +186,6 @@ export default function PaymentRequestCard({ request, userAddress, onPaymentSucc
 
   // Step 1: Show confirmation modal with final gas fee calculation
   const handleAccept = async () => {
-    // Check if Solana (requires different handling)
-    if (request.chain_id === 'solana' || String(request.chain_id) === 'solana') {
-      toast.error('Solana payments require a Solana-compatible wallet. Please connect a wallet that supports Solana.');
-      return;
-    }
     
     // Ensure chain_id is a number for EVM chains
     const chainIdNum = typeof request.chain_id === 'string' ? parseInt(request.chain_id) : request.chain_id;

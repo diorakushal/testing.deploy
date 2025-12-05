@@ -41,7 +41,6 @@ export default function GasFeeDisplay({ chainId, tokenSymbol, amount, onTotalAmo
           'WBTC': 'wrapped-bitcoin',
           'ETH': 'ethereum',
           'BTC': 'bitcoin',
-          'SOL': 'solana',
           'BNB': 'binancecoin',
           'LINK': 'chainlink',
           'UNI': 'uniswap',
@@ -149,88 +148,6 @@ export default function GasFeeDisplay({ chainId, tokenSymbol, amount, onTotalAmo
       return;
     }
 
-    if (chainId === 'solana') {
-      const fetchSolanaGasInfo = async () => {
-        try {
-          setLoading(true);
-          setError(null);
-          
-          // Fetch SOL price from backend proxy - REQUIRED, no fallback
-          const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-          const priceResponse = await fetch(
-            `${API_URL}/crypto-price?ids=solana`
-          );
-          
-          if (!priceResponse.ok) {
-            const errorData = await priceResponse.json().catch(() => ({}));
-            throw new Error(errorData.error || 'Failed to fetch SOL price');
-          }
-          
-          const priceData = await priceResponse.json();
-          const solPrice = priceData.solana?.usd;
-          
-          if (!solPrice || typeof solPrice !== 'number') {
-            throw new Error('SOL price data not available');
-          }
-
-          // Fetch recent prioritization fees from Solana RPC - REQUIRED, no fallback
-          const rpcResponse = await fetch('https://api.mainnet-beta.solana.com', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              jsonrpc: '2.0',
-              id: 1,
-              method: 'getRecentPrioritizationFees',
-              params: []
-            })
-          });
-          
-          if (!rpcResponse.ok) {
-            throw new Error('Failed to fetch Solana fees from RPC');
-          }
-          
-          const rpcData = await rpcResponse.json();
-          
-          if (!rpcData.result || rpcData.result.length === 0) {
-            throw new Error('No prioritization fee data available');
-          }
-          
-          // Get median prioritization fee (in microlamports per compute unit)
-          const fees = rpcData.result
-            .map((f: any) => f.prioritizationFee)
-            .sort((a: number, b: number) => a - b);
-          const medianFee = fees[Math.floor(fees.length / 2)];
-          
-          // Convert to SOL: medianFee is in microlamports (1/1,000,000 of a lamport)
-          // 1 SOL = 1,000,000,000 lamports
-          // For a typical transfer: ~5000 compute units
-          const computeUnits = 5000;
-          const feeLamports = (medianFee * computeUnits) / 1_000_000;
-          const gasFeeSOL = feeLamports / 1_000_000_000; // Convert lamports to SOL
-
-      const gasFeeUSD = gasFeeSOL * solPrice;
-      const amountNum = parseFloat(amount);
-          const gasPercentage = amountNum > 0 ? (gasFeeUSD / amountNum) * 100 : 0;
-      
-      setGasInfo({
-            gasPrice: `${gasFeeSOL.toFixed(8)}`,
-            estimatedFee: `${gasFeeSOL.toFixed(8)} SOL`,
-        estimatedFeeUSD: `~$${gasFeeUSD.toFixed(4)}`
-      });
-        } catch (err: any) {
-          console.error('Error fetching Solana gas info:', err);
-          setError(err.message || 'Failed to fetch Solana gas fees');
-          setGasInfo(null);
-        } finally {
-      setLoading(false);
-        }
-      };
-      
-      fetchSolanaGasInfo();
-      return;
-    }
-
-
     const fetchGasInfo = async () => {
       // Declare variables outside try block for catch block access
       let client;
@@ -283,7 +200,7 @@ export default function GasFeeDisplay({ chainId, tokenSymbol, amount, onTotalAmo
           });
           nativeCoinGeckoId = 'matic-network';
         } else {
-          setError('Chain not supported. Supported chains: Ethereum, BNB Chain, Base, Polygon, Solana');
+          setError('Chain not supported. Supported chains: Ethereum, BNB Chain, Base, Polygon');
           setLoading(false);
           return;
         }

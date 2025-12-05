@@ -223,7 +223,7 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
   const selectedChain = getChainConfig(formData.chainId);
   const chainIdNum = typeof formData.chainId === 'number' 
     ? formData.chainId 
-    : (formData.chainId === 'solana' ? null : parseInt(formData.chainId as string));
+    : parseInt(formData.chainId as string);
 
   const handleCaptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -243,6 +243,7 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
 
   // Store payment send ID to update status later
   const [paymentSendId, setPaymentSendId] = useState<string | null>(null);
+  const processedHashRef = useRef<string | null>(null); // Track processed transaction hashes
 
   // Handle transaction success for direct payments
   useEffect(() => {
@@ -251,11 +252,14 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
       hash,
       mode,
       isConfirming,
-      shouldCallHandler: isSuccess && hash && mode === 'pay'
+      shouldCallHandler: isSuccess && hash && mode === 'pay',
+      alreadyProcessed: processedHashRef.current === hash
     });
     
-    if (isSuccess && hash && mode === 'pay') {
+    // Only process if transaction is confirmed, we're in pay mode, and we haven't already processed this hash
+    if (isSuccess && hash && mode === 'pay' && processedHashRef.current !== hash) {
       console.log('[CreateMarketSidebar] ✅ Transaction confirmed, calling handleDirectPaymentSuccess');
+      processedHashRef.current = hash; // Mark as processed before calling
       handleDirectPaymentSuccess(hash);
     }
   }, [isSuccess, hash, mode, isConfirming]);
@@ -273,20 +277,62 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
     try {
       toast.dismiss();
       
-      // If payment send was already created in onSuccess callback, just update status
+      // First, try to find existing payment send by tx_hash (most reliable method)
+      let paymentSendIdToUpdate: string | null = null;
+      
       if (paymentSendId) {
-        console.log('[CreateMarketSidebar] Payment send already created, updating status to confirmed');
+        // Use the stored paymentSendId if available
+        paymentSendIdToUpdate = paymentSendId;
+        console.log('[CreateMarketSidebar] Using stored paymentSendId:', paymentSendIdToUpdate);
+      } else {
+        // Fallback: Query payment sends by tx_hash to find the existing record
+        console.log('[CreateMarketSidebar] Payment send ID not in state, searching by tx_hash:', txHash);
         try {
-          await axios.patch(`${API_URL}/payment-sends/${paymentSendId}/confirmed`, {
+          const searchResponse = await axios.get(`${API_URL}/payment-sends`, {
+            params: { txHash: txHash }
+          });
+          
+          if (searchResponse.data && searchResponse.data.length > 0) {
+            // Find the most recent pending payment send with this tx_hash
+            // Supabase returns snake_case, so we check both tx_hash and txHash (in case of transformation)
+            const pendingSend = searchResponse.data.find((send: any) => {
+              const sendTxHash = send.tx_hash || send.txHash;
+              return sendTxHash === txHash && send.status === 'pending';
+            }) || searchResponse.data[0];
+            
+            if (pendingSend) {
+              paymentSendIdToUpdate = pendingSend.id;
+              console.log('[CreateMarketSidebar] ✅ Found existing payment send by tx_hash:', paymentSendIdToUpdate, {
+                tx_hash: pendingSend.tx_hash || pendingSend.txHash,
+                status: pendingSend.status
+              });
+            }
+          }
+        } catch (searchError: any) {
+          console.warn('[CreateMarketSidebar] Could not search for payment send by tx_hash:', searchError.message);
+        }
+      }
+      
+      // Update the payment send status to confirmed
+      if (paymentSendIdToUpdate) {
+        console.log('[CreateMarketSidebar] Updating payment send status to confirmed:', paymentSendIdToUpdate);
+        try {
+          await axios.patch(`${API_URL}/payment-sends/${paymentSendIdToUpdate}/confirmed`, {
             txHash: txHash
           });
           console.log('[CreateMarketSidebar] ✅ Payment send marked as confirmed');
         } catch (error: any) {
           console.error('[CreateMarketSidebar] ❌ Error updating payment send status:', error);
+          console.error('[CreateMarketSidebar] Error details:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status
+          });
+          // Don't fail the whole flow if update fails - payment was still sent
         }
       } else {
-        // Fallback: Create payment send if it wasn't created in onSuccess
-        console.log('[CreateMarketSidebar] Payment send not created yet, creating now...');
+        // Last resort: Create payment send if it doesn't exist
+        console.log('[CreateMarketSidebar] Payment send not found, creating new record...');
         const recipientAddress = selectedRecipient?.walletAddress || formData.to;
         
         if (selectedToken && selectedChain && recipientAddress && address) {
@@ -309,7 +355,7 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
             console.log('[CreateMarketSidebar] ✅ Payment send record created successfully:', response.data);
             setPaymentSendId(response.data.id);
             
-            // Update status to confirmed
+            // Update status to confirmed immediately
             try {
               await axios.patch(`${API_URL}/payment-sends/${response.data.id}/confirmed`, {
                 txHash: txHash
@@ -325,12 +371,13 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
               response: error.response?.data,
               status: error.response?.status
             });
-            toast.error(`Failed to record payment: ${error.response?.data?.error || error.message}`);
+            // Don't show error toast - payment was successful, just recording failed
           }
         }
       }
       
       toast.success('Payment sent successfully!');
+      setLoading(false); // Reset loading state
       setStep('success');
       
       // Call onSuccess immediately to refresh feed, then reset form after delay
@@ -341,6 +388,7 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
         setCharCount(0);
         setSelectedRecipient(null);
         setPaymentSendId(null);
+        processedHashRef.current = null; // Reset processed hash when form resets
         setStep('form');
       }, 2000);
     } catch (error: any) {
@@ -614,45 +662,12 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
       return;
     }
     
-    // Check if Solana chain is selected
-    const isSolana = formData.chainId === 'solana' || String(formData.chainId).toLowerCase() === 'solana';
-    
-    let requesterAddress: string;
-    
-    if (isSolana) {
-      // For Solana, need to connect to Solana wallet
-      if (typeof window.solana === 'undefined') {
-        toast.error('No Solana wallet detected. Please install a Solana-compatible wallet like Phantom, MetaMask, or Coinbase Wallet.');
-        return;
-      }
-      
-      try {
-        setLoading(true);
-        toast.loading('Connecting to Solana wallet...');
-        
-        // Connect to Solana wallet (works with Phantom, MetaMask, Coinbase, etc.)
-        const response = await window.solana.connect();
-        requesterAddress = response.publicKey.toString();
-        
-        toast.dismiss();
-      } catch (error: any) {
-        toast.dismiss();
-        if (error.code === 4001) {
-          toast.error('Solana wallet connection rejected');
-        } else {
-          toast.error('Failed to connect Solana wallet');
-        }
-        setLoading(false);
-        return;
-      }
-    } else {
-      // For EVM chains, use MetaMask address
-      if (!isConnected || !address) {
-        toast.error('Please connect your wallet');
-        return;
-      }
-      requesterAddress = address;
+    // For EVM chains, use MetaMask address
+    if (!isConnected || !address) {
+      toast.error('Please connect your wallet');
+      return;
     }
+    const requesterAddress = address;
 
     try {
       setLoading(true);
@@ -756,7 +771,7 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
           <select
             value={formData.chainId}
             onChange={(e) => {
-              const newChainId = e.target.value === 'solana' ? 'solana' : parseInt(e.target.value);
+              const newChainId = parseInt(e.target.value);
               const allChainTokens = getTokensForChain(newChainId);
               const stablecoins = allChainTokens.filter(token => token.symbol === 'USDC' || token.symbol === 'USDT');
               const defaultToken = stablecoins.find(t => t.symbol === formData.tokenSymbol)?.symbol || stablecoins[0]?.symbol || 'USDC';
@@ -1194,13 +1209,17 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                 )}
-                {step === 'creating' || isPending || isConfirming
-                  ? mode === 'pay' 
-                    ? 'Sending...' 
-                    : 'Posting...'
-                  : mode === 'pay'
-                    ? 'Pay crypto'
-                    : 'Request crypto'}
+                {step === 'success'
+                  ? mode === 'pay'
+                    ? 'Payment Sent!'
+                    : 'Request Posted!'
+                  : step === 'creating' || isPending || isConfirming
+                    ? mode === 'pay' 
+                      ? 'Sending...' 
+                      : 'Posting...'
+                    : mode === 'pay'
+                      ? 'Pay crypto'
+                      : 'Request crypto'}
               </button>
             </div>
           </div>

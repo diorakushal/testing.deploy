@@ -55,17 +55,6 @@ export const CHAINS: Record<number | string, ChainConfig> = {
       decimals: 18
     }
   },
-  'solana': {
-    id: 'solana' as any,
-    name: 'Solana',
-    rpcUrl: 'https://api.mainnet-beta.solana.com',
-    explorer: 'https://solscan.io',
-    nativeCurrency: {
-      name: 'SOL',
-      symbol: 'SOL',
-      decimals: 9
-    }
-  },
   42161: {
     id: 42161,
     name: 'Arbitrum',
@@ -317,49 +306,6 @@ export const TOKENS: TokenConfig[] = [
     decimals: 8,
     chainId: 56
   },
-  // Solana (SPL tokens - using mint addresses)
-  {
-    symbol: 'USDC',
-    name: 'USD Coin',
-    address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // Solana USDC mint
-    decimals: 6,
-    chainId: 'solana' as any
-  },
-  {
-    symbol: 'USDT',
-    name: 'Tether USD',
-    address: 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // Solana USDT mint
-    decimals: 6,
-    chainId: 'solana' as any
-  },
-  {
-    symbol: 'SOL',
-    name: 'Solana',
-    address: 'So11111111111111111111111111111111111111112', // Native SOL wrapped
-    decimals: 9,
-    chainId: 'solana' as any
-  },
-  {
-    symbol: 'WBTC',
-    name: 'Wrapped Bitcoin',
-    address: '3NZ9JMVBmGAqocybic2c7LQCJScmgsAZ6vQqTDzcqmJh', // Solana WBTC
-    decimals: 8,
-    chainId: 'solana' as any
-  },
-  {
-    symbol: 'BONK',
-    name: 'Bonk',
-    address: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', // Solana BONK
-    decimals: 5,
-    chainId: 'solana' as any
-  },
-  {
-    symbol: 'WIF',
-    name: 'dogwifhat',
-    address: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm', // Solana WIF
-    decimals: 6,
-    chainId: 'solana' as any
-  },
   // Arbitrum
   {
     symbol: 'USDC',
@@ -457,7 +403,6 @@ export const AVAILABLE_CHAINS = [
   { id: 8453, name: 'Base' },
   { id: 1, name: 'Ethereum' },
   { id: 56, name: 'BNB Chain' },
-  { id: 137, name: 'Polygon' },
-  { id: 'solana', name: 'Solana' }
+  { id: 137, name: 'Polygon' }
 ];
 

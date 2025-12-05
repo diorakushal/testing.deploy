@@ -60,10 +60,6 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId }: Prefe
 
   const getWalletForChain = (chainId: number | string): PreferredWallet | undefined => {
     const wallet = preferredWallets.find(w => {
-      // Handle both number and string comparisons (database stores as string)
-      if (typeof chainId === 'string' && chainId === 'solana') {
-        return w.chain_id === 'solana' || String(w.chain_id).toLowerCase() === 'solana';
-      }
       const walletChainId = typeof w.chain_id === 'string' ? parseInt(w.chain_id) : w.chain_id;
       return walletChainId === chainId;
     });
@@ -71,119 +67,7 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId }: Prefe
   };
 
   const handleAddWallet = async (targetChainId: number | string) => {
-    const isSolana = targetChainId === 'solana' || String(targetChainId).toLowerCase() === 'solana';
-    const chainName = isSolana ? 'Solana' : (getChainConfig(targetChainId as number)?.name || `Chain ${targetChainId}`);
-    
-    // Handle Solana separately (any Solana-compatible wallet)
-    if (isSolana) {
-      try {
-        setConnectingChain('solana');
-        
-        // Check if any Solana wallet is available
-        // Most wallets (Phantom, MetaMask, Coinbase, etc.) expose window.solana
-        if (typeof window.solana === 'undefined') {
-          toast.error('No Solana wallet detected. Please install a Solana-compatible wallet like Phantom, MetaMask, or Coinbase Wallet.');
-          setConnectingChain(null);
-          return;
-        }
-        
-        toast.loading('Connecting to Solana wallet...');
-        
-        // Connect to Solana wallet (works with Phantom, MetaMask, Coinbase, etc.)
-        const response = await window.solana.connect();
-        const solanaAddress = response.publicKey.toString();
-        
-        toast.dismiss();
-        
-        // Validate Solana address (base58, typically 32-44 characters)
-        if (!solanaAddress || solanaAddress.length < 32) {
-          toast.error('Invalid Solana wallet address');
-          setConnectingChain(null);
-          return;
-        }
-        
-        // Save to backend
-        setLoading(true);
-        toast.loading('Saving wallet address...');
-        
-        try {
-          const payload = {
-            userId,
-            chainId: 'solana',
-            receivingWalletAddress: solanaAddress
-          };
-          
-          console.log('[PreferredWalletsModal] Sending request:', {
-            userId,
-            chainId: payload.chainId,
-            chainIdType: typeof payload.chainId,
-            addressLength: solanaAddress.length,
-            addressPreview: solanaAddress.substring(0, 10) + '...'
-          });
-          
-          const response_save = await axios.post(`${API_URL}/preferred-wallets`, payload);
-          
-          toast.dismiss();
-        
-          // Update state
-          const savedWallet: PreferredWallet = response_save.data;
-          setPreferredWallets(prev => {
-            const existing = prev.find(w => {
-              const wChainId = String(w.chain_id).toLowerCase();
-              return wChainId === 'solana';
-            });
-            if (existing) {
-              return prev.map(w => {
-                const wChainId = String(w.chain_id).toLowerCase();
-                return wChainId === 'solana' ? savedWallet : w;
-              });
-            } else {
-              return [...prev, savedWallet];
-            }
-          });
-          
-          await fetchPreferredWallets();
-          toast.success('Wallet address saved!');
-          setConnectingChain(null);
-          setLoading(false);
-          return;
-        } catch (saveError: any) {
-          toast.dismiss();
-          setConnectingChain(null);
-          setLoading(false);
-          
-          // Handle API errors
-          if (saveError.response) {
-            const errorMessage = saveError.response.data?.error || saveError.response.statusText || 'Failed to save wallet';
-            console.error('[PreferredWalletsModal] Save error:', {
-              status: saveError.response.status,
-              error: errorMessage,
-              data: saveError.response.data
-            });
-            toast.error(errorMessage);
-          } else if (saveError.request) {
-            console.error('[PreferredWalletsModal] Network error:', saveError.message);
-            toast.error('Network error. Please check your connection and try again.');
-          } else {
-            console.error('[PreferredWalletsModal] Error:', saveError.message);
-            toast.error(saveError.message || 'Failed to save wallet address');
-          }
-          return;
-        }
-      } catch (error: any) {
-        toast.dismiss();
-        setConnectingChain(null);
-        setLoading(false);
-        
-        if (error.code === 4001) {
-          toast.error('Solana wallet connection rejected');
-        } else {
-          console.error('[PreferredWalletsModal] Connection error:', error);
-          toast.error(error.message || 'Failed to connect Solana wallet');
-        }
-        return;
-      }
-    }
+    const chainName = getChainConfig(targetChainId as number)?.name || `Chain ${targetChainId}`;
     
     // EVM chains - use existing logic
     if (!isConnected) {
@@ -293,21 +177,14 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId }: Prefe
       console.log('Saved wallet response:', savedWallet);
       
       // Update the preferredWallets state
-      // Note: chain_id might be string from database, handle both numbers and 'solana'
       setPreferredWallets(prev => {
         const existing = prev.find(w => {
-          if (targetChainId === 'solana' || String(targetChainId).toLowerCase() === 'solana') {
-            return String(w.chain_id).toLowerCase() === 'solana';
-          }
           const wChainId = typeof w.chain_id === 'string' ? parseInt(w.chain_id) : w.chain_id;
           return wChainId === targetChainId;
         });
         if (existing) {
           // Update existing
           return prev.map(w => {
-            if (targetChainId === 'solana' || String(targetChainId).toLowerCase() === 'solana') {
-              return String(w.chain_id).toLowerCase() === 'solana' ? savedWallet : w;
-            }
             const wChainId = typeof w.chain_id === 'string' ? parseInt(w.chain_id) : w.chain_id;
             return wChainId === targetChainId ? savedWallet : w;
           });
@@ -411,10 +288,9 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId }: Prefe
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {AVAILABLE_CHAINS.map((chain) => {
-                    const isSolanaChain = chain.id === 'solana' || String(chain.id).toLowerCase() === 'solana';
-                    const chainId = isSolanaChain ? 'solana' : (typeof chain.id === 'string' ? parseInt(chain.id) : chain.id);
+                    const chainId = typeof chain.id === 'string' ? parseInt(chain.id) : chain.id;
                     const wallet = getWalletForChain(chainId);
-                    const isConnecting = connectingChain === chainId || (isSolanaChain && connectingChain === 'solana');
+                    const isConnecting = connectingChain === chainId;
                     
                     return (
                       <tr key={chain.id} className="hover:bg-gray-50">
@@ -424,10 +300,7 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId }: Prefe
                         <td className="px-4 py-3">
                           {wallet ? (
                             <span className="text-sm font-mono text-gray-600">
-                              {isSolanaChain 
-                                ? `${wallet.receiving_wallet_address.slice(0, 4)}...${wallet.receiving_wallet_address.slice(-4)}`
-                                : `${wallet.receiving_wallet_address.slice(0, 6)}...${wallet.receiving_wallet_address.slice(-4)}`
-                              }
+                              {`${wallet.receiving_wallet_address.slice(0, 6)}...${wallet.receiving_wallet_address.slice(-4)}`}
                             </span>
                           ) : (
                             <span className="text-sm text-gray-400 italic">Not set</span>
@@ -464,8 +337,6 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId }: Prefe
                 <p className="text-sm text-yellow-800">
                   <strong>Connect your wallet</strong> to add receiving addresses for each chain. 
                   Click "Add Wallet" and your wallet extension will prompt you to connect.
-                  <br />
-                  <strong>Note:</strong> For Solana, you'll need a Solana-compatible wallet (Phantom, MetaMask, Coinbase Wallet, etc.).
                 </p>
               </div>
             )}

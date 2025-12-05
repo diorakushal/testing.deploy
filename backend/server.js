@@ -1504,105 +1504,36 @@ app.post('/api/preferred-wallets', async (req, res) => {
     }
 
     // Validate chain ID
-    // Normalize the chainId to string and lowercase for comparison
-    const chainIdNormalized = String(chainId || '').trim().toLowerCase();
-    const isSolana = chainIdNormalized === 'solana';
+    const chainIdNum = parseInt(String(chainId).trim(), 10);
+    const validChainIds = [8453, 1, 56, 137]; // Base, Ethereum, BNB, Polygon
     
-    console.log('[PreferredWalletsAPI] Chain ID validation:', {
-      original: chainId,
-      type: typeof chainId,
-      normalized: chainIdNormalized,
-      isSolana: isSolana,
-      comparison: `"${chainIdNormalized}" === "solana" = ${isSolana}`
-    });
-    
-    // Check if it's Solana first (explicit check)
-    if (chainIdNormalized === 'solana') {
-      console.log('[PreferredWalletsAPI] ✅ Solana chain ID validated - continuing...');
-      // Solana is valid, continue to address validation
-    } else {
-      // For EVM chains, check if it's a valid integer chain ID
-      const chainIdNum = parseInt(String(chainId).trim(), 10);
-      const validEVMChainIds = [8453, 1, 56, 137]; // Base, Ethereum, BNB, Polygon
-      
-      console.log('[PreferredWalletsAPI] EVM chain ID validation:', {
+    if (isNaN(chainIdNum) || !validChainIds.includes(chainIdNum)) {
+      console.error('[PreferredWalletsAPI] ❌ Invalid chain ID:', {
+        received: chainId,
         parsed: chainIdNum,
-        isValid: !isNaN(chainIdNum) && validEVMChainIds.includes(chainIdNum),
-        validChains: validEVMChainIds
+        validChains: validChainIds
       });
-      
-      if (isNaN(chainIdNum) || !validEVMChainIds.includes(chainIdNum)) {
-        console.error('[PreferredWalletsAPI] ❌ Invalid chain ID:', {
-          received: chainId,
-          type: typeof chainId,
-          normalized: chainIdNormalized,
-          parsed: chainIdNum,
-          isNaN: isNaN(chainIdNum),
-          inValidList: validEVMChainIds.includes(chainIdNum)
-        });
-        return res.status(400).json({ 
-          error: `Invalid chain ID: ${chainId}. Valid chain IDs are: 8453 (Base), 1 (Ethereum), 56 (BNB), 137 (Polygon), or 'solana'` 
-        });
-      }
-      console.log('[PreferredWalletsAPI] ✅ EVM chain ID validated');
+      return res.status(400).json({ 
+        error: `Invalid chain ID: ${chainId}. Valid chain IDs are: 8453 (Base), 1 (Ethereum), 56 (BNB), 137 (Polygon)` 
+      });
     }
 
-    // Validate wallet address format
-    if (isSolana) {
-      console.log('[PreferredWalletsAPI] Validating Solana address:', {
-        address: receivingWalletAddress,
-        length: receivingWalletAddress?.length,
-        first10: receivingWalletAddress?.substring(0, 10)
-      });
-      
-      // Solana addresses are base58 encoded
-      // Standard addresses are typically 32-44 characters, but can be shorter for compressed keys
-      // Minimum reasonable length is 32 characters, max is 44
-      const addressLength = receivingWalletAddress?.length || 0;
-      if (!receivingWalletAddress || addressLength < 32 || addressLength > 44) {
-        console.error('[PreferredWalletsAPI] ❌ Invalid Solana address length:', {
-          address: receivingWalletAddress?.substring(0, 20),
-          length: addressLength,
-          expected: '32-44 characters',
-          min: 32,
-          max: 44
-        });
-        return res.status(400).json({ 
-          error: `Invalid Solana wallet address format. Expected 32-44 characters, got ${addressLength} characters.` 
-        });
-      }
-      // Basic check: Solana addresses don't start with 0x
-      if (receivingWalletAddress.startsWith('0x')) {
-        console.error('[PreferredWalletsAPI] ❌ Solana address starts with 0x:', receivingWalletAddress.substring(0, 20));
-        return res.status(400).json({ error: 'Invalid Solana wallet address format (should not start with 0x)' });
-      }
-      // Basic base58 check: should only contain alphanumeric characters
-      if (!/^[A-Za-z0-9]+$/.test(receivingWalletAddress)) {
-        console.error('[PreferredWalletsAPI] ❌ Solana address contains invalid characters:', {
-          address: receivingWalletAddress,
-          hasInvalidChars: !/^[A-Za-z0-9]+$/.test(receivingWalletAddress)
-        });
-        return res.status(400).json({ error: 'Invalid Solana wallet address format (contains invalid characters)' });
-      }
-      console.log('[PreferredWalletsAPI] ✅ Solana address format validated');
-    } else {
-      // EVM addresses must be 0x followed by 40 hex characters
-      if (!/^0x[a-fA-F0-9]{40}$/.test(receivingWalletAddress)) {
-        console.error('[PreferredWalletsAPI] Invalid EVM address format:', receivingWalletAddress.substring(0, 20));
-        return res.status(400).json({ error: 'Invalid wallet address format' });
-      }
+    // Validate wallet address format (EVM addresses must be 0x followed by 40 hex characters)
+    if (!/^0x[a-fA-F0-9]{40}$/.test(receivingWalletAddress)) {
+      console.error('[PreferredWalletsAPI] Invalid address format:', receivingWalletAddress.substring(0, 20));
+      return res.status(400).json({ error: 'Invalid wallet address format' });
     }
 
     const { supabase } = require('./lib/supabase');
 
     // First, check if wallet already exists for this user/chain
     // Note: chain_id is stored as string in database
-    const chainIdStr = isSolana ? 'solana' : String(chainId);
+    const chainIdStr = String(chainId);
     const { data: existing } = await supabase
       .from('preferred_wallets')
       .select('id')
       .eq('user_id', userId)
-      .eq('chain_id', chainIdStr) // Convert to string to match database schema
+      .eq('chain_id', chainIdStr)
       .single();
 
     let result;
@@ -1611,7 +1542,7 @@ app.post('/api/preferred-wallets', async (req, res) => {
       const { data, error } = await supabase
         .from('preferred_wallets')
         .update({
-          receiving_wallet_address: isSolana ? receivingWalletAddress : receivingWalletAddress.toLowerCase(),
+          receiving_wallet_address: receivingWalletAddress.toLowerCase(),
           updated_at: new Date().toISOString()
         })
         .eq('id', existing.id)
@@ -1621,13 +1552,13 @@ app.post('/api/preferred-wallets', async (req, res) => {
       if (error) throw error;
       result = data;
     } else {
-      // Insert new (chain_id is stored as string in database)
+      // Insert new
       const { data, error } = await supabase
         .from('preferred_wallets')
         .insert({
           user_id: userId,
-          chain_id: chainIdStr, // Use string format (already converted above)
-          receiving_wallet_address: isSolana ? receivingWalletAddress : receivingWalletAddress.toLowerCase()
+          chain_id: chainIdStr,
+          receiving_wallet_address: receivingWalletAddress.toLowerCase()
         })
         .select()
         .single();
@@ -1792,9 +1723,9 @@ app.post('/api/payment-sends', async (req, res) => {
 // Get payment sends
 app.get('/api/payment-sends', async (req, res) => {
   try {
-    const { sender_user_id, recipient_user_id, sender_address, recipient_address, status } = req.query;
+    const { sender_user_id, recipient_user_id, sender_address, recipient_address, status, txHash } = req.query;
 
-    console.log('[PaymentSendsAPI] Fetching payment sends', { sender_user_id, recipient_user_id, sender_address, recipient_address, status });
+    console.log('[PaymentSendsAPI] Fetching payment sends', { sender_user_id, recipient_user_id, sender_address, recipient_address, status, txHash });
 
     const { supabase } = require('./lib/supabase');
 
@@ -1821,6 +1752,10 @@ app.get('/api/payment-sends', async (req, res) => {
 
     if (status) {
       query = query.eq('status', status);
+    }
+
+    if (txHash) {
+      query = query.eq('tx_hash', txHash);
     }
 
     const { data, error } = await query;
@@ -1970,7 +1905,6 @@ app.get('/api/crypto-price', async (req, res) => {
               'tether': 'USDTUSDT',
               'ethereum': 'ETHUSDT',
               'bitcoin': 'BTCUSDT',
-              'solana': 'SOLUSDT',
               'binancecoin': 'BNBUSDT',
               'matic-network': 'MATICUSDT',
               'avalanche-2': 'AVAXUSDT',
@@ -2024,7 +1958,6 @@ app.get('/api/crypto-price', async (req, res) => {
             'eth': { usd: 3000.0 },
             'bitcoin': { usd: 45000.0 },
             'btc': { usd: 45000.0 },
-            'solana': { usd: 100.0 },
             'sol': { usd: 100.0 },
             'binancecoin': { usd: 300.0 },
             'bnb': { usd: 300.0 },
