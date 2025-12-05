@@ -63,3 +63,4 @@ FROM information_schema.columns
 WHERE table_name = 'preferred_wallets'
 AND column_name IN ('chain_id', 'receiving_wallet_address');
 
+

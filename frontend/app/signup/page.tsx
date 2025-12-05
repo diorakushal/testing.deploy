@@ -442,7 +442,7 @@ export default function SignUpPage() {
               <Link href="/feed" className="inline-block bg-white">
                 <img 
                   src="/applogo.png" 
-                  alt="Xelli" 
+                  alt="Zemme" 
                   className="w-16 h-16 object-contain bg-white"
                   style={{ backgroundColor: '#ffffff' }}
                 />

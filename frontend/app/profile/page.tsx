@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import Link from 'next/link';
-import Header from '@/components/Header';
 import { supabase } from '@/lib/supabase';
+import { getUserGradient, getUserInitials, getAvatarStyle } from '@/lib/userAvatar';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -13,6 +13,9 @@ interface User {
   id: string;
   wallet_address: string;
   username: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
   markets_created: number;
   total_staked: number | string;
   total_earnings: number | string;
@@ -103,18 +106,24 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Header */}
-      <Header />
-
+    <div className="min-h-screen bg-white">
       {/* Main Content */}
-      <main className="flex-1 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* User Info Card */}
         <div className="bg-white rounded-xl shadow-sm p-8 mb-6">
           <div className="flex items-start gap-6">
-            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold">
-              {user.username?.charAt(0).toUpperCase() || user.wallet_address.charAt(2).toUpperCase()}
-            </div>
+            {(() => {
+              const gradient = getUserGradient(user.id);
+              const initials = getUserInitials(user.first_name, user.last_name, user.username, user.email);
+              return (
+                <div 
+                  className="w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-bold"
+                  style={getAvatarStyle(gradient)}
+                >
+                  {initials}
+                </div>
+              );
+            })()}
             <div className="flex-1">
               <h2 className="text-2xl font-bold mb-2">
                 {user.username || 'Anonymous User'}

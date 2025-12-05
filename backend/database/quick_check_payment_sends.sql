@@ -23,3 +23,4 @@ LIMIT 10;
 -- If you see results above, payment sends ARE being recorded!
 -- If you see no results, payment sends are NOT being created in the database.
 
+

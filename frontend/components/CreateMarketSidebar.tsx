@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import { useAccount, useChainId, useSwitchChain, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
 import { parseUnits, Address, isAddress, formatUnits } from 'viem';
 import toast from 'react-hot-toast';
 import { AVAILABLE_CHAINS, getTokensForChain, getToken, getChainConfig, type TokenConfig } from '@/lib/tokenConfig';
 import { supabase } from '@/lib/supabase';
+import { getUserGradient, getUserInitials, getAvatarStyle } from '@/lib/userAvatar';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -47,9 +49,12 @@ const ERC20_ABI = [
 
 interface CreateMarketSidebarProps {
   onSuccess: () => void;
+  defaultMode?: 'pay' | 'request';
+  initialTo?: string;
 }
 
-export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarProps) {
+export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request', initialTo }: CreateMarketSidebarProps) {
+  const router = useRouter();
   const { address, isConnected } = useAccount();
   const chainId = useChainId(); // Get current chain from header
   const { switchChain } = useSwitchChain(); // To switch chain in header
@@ -62,13 +67,36 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
     }
   });
   
+  // Get mode from URL search params if available, otherwise use defaultMode
+  const getInitialMode = () => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const modeParam = urlParams.get('mode');
+      if (modeParam === 'pay' || modeParam === 'request') {
+        return modeParam;
+      }
+    }
+    return defaultMode;
+  };
+  
   // Mode: 'pay' or 'request'
-  const [mode, setMode] = useState<'pay' | 'request'>('request');
+  const [mode, setMode] = useState<'pay' | 'request'>(getInitialMode());
+  
+  // Sync mode with URL params when component mounts or URL changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const modeParam = urlParams.get('mode');
+      if (modeParam === 'pay' || modeParam === 'request') {
+        setMode(modeParam);
+      }
+    }
+  }, []);
   
   // Initialize with current chain from header, fallback to Base if not connected
   const [formData, setFormData] = useState({
     amount: '',
-    to: '', // Recipient field
+    to: initialTo || '', // Recipient field
     caption: '',
     chainId: (chainId || 8453) as number | string, // Use current chain from header, default to Base
     tokenSymbol: 'USDC', // Default token
@@ -133,8 +161,21 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
       
       console.log('Search API response:', response.data);
       
-      // Filter out current user from results
-      const filtered = response.data.filter((user: any) => user.id !== userId);
+      // Get current user's email to also filter by email
+      let currentUserEmail: string | null = null;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        currentUserEmail = session?.user?.email || null;
+      } catch (err) {
+        console.error('Error getting user email:', err);
+      }
+      
+      // Filter out current user from results (by ID and email to be safe)
+      const filtered = response.data.filter((user: any) => {
+        if (user.id === userId) return false;
+        if (currentUserEmail && user.email === currentUserEmail) return false;
+        return true;
+      });
       console.log('Filtered results (excluding current user):', filtered);
       
       setSearchResults(filtered);
@@ -737,7 +778,9 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
         <div className="flex bg-gray-100 rounded-full p-1 w-full max-w-xs">
           <button
             type="button"
-            onClick={() => setMode('pay')}
+            onClick={() => {
+              router.push('/pay');
+            }}
             className={`flex-1 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
               mode === 'pay'
                 ? 'bg-white text-black shadow-sm'
@@ -749,7 +792,9 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
           </button>
           <button
             type="button"
-            onClick={() => setMode('request')}
+            onClick={() => {
+              router.push('/request');
+            }}
             className={`flex-1 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
               mode === 'request'
                 ? 'bg-white text-black shadow-sm'
@@ -997,26 +1042,10 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
                     </div>
                   ) : searchResults.length > 0 ? (
                     searchResults.map((user: any) => {
-                      // Get initials from first_name and last_name, or fallback to username
-                      const getInitials = () => {
-                        if (user.first_name && user.last_name) {
-                          return (user.first_name[0] + user.last_name[0]).toUpperCase();
-                        }
-                        if (user.first_name) {
-                          return user.first_name.substring(0, 2).toUpperCase();
-                        }
-                        if (user.username) {
-                          return user.username.substring(0, 2).toUpperCase();
-                        }
-                        return 'U';
-                      };
-                      
                       // Get display name: first_name + last_name, or fallback
                       const displayName = (user.first_name && user.last_name)
                         ? `${user.first_name} ${user.last_name}`
                         : user.first_name || user.displayName || user.email?.split('@')[0] || 'User';
-                      
-                      const initials = getInitials();
                       
                       return (
                         <button
@@ -1088,14 +1117,18 @@ export default function CreateMarketSidebar({ onSuccess }: CreateMarketSidebarPr
                           className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 flex items-center gap-3"
                         >
                           {/* Avatar with gradient background - matching image style */}
-                          <div 
-                            className="inline-block w-10 h-10 rounded-full flex items-center justify-center text-white font-medium text-sm flex-shrink-0"
-                            style={{
-                              background: 'linear-gradient(135deg, #ff6b35 0%, #f7931e 50%, #ff1744 100%)'
-                            }}
-                          >
-                            {initials}
-                          </div>
+                          {(() => {
+                            const gradient = getUserGradient(user.id);
+                            const userInitials = getUserInitials(user.first_name, user.last_name, user.username, user.email);
+                            return (
+                              <div 
+                                className="inline-block w-10 h-10 rounded-full flex items-center justify-center text-white font-medium text-sm flex-shrink-0"
+                                style={getAvatarStyle(gradient)}
+                              >
+                                {userInitials}
+                              </div>
+                            );
+                          })()}
                           
                           {/* Text content - display name on top, username below */}
                           <div className="flex-1 min-w-0">

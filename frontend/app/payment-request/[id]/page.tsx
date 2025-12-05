@@ -5,9 +5,9 @@ import { useParams, useRouter } from 'next/navigation';
 import axios from 'axios';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import Header from '@/components/Header';
 import PaymentRequestCard from '@/components/PaymentRequestCard';
 import { supabase } from '@/lib/supabase';
+import { useAccount } from 'wagmi';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -36,8 +36,9 @@ export default function PaymentRequestDetail() {
   const [request, setRequest] = useState<PaymentRequest | null>(null);
   const [loading, setLoading] = useState(true);
   const [authLoading, setAuthLoading] = useState(true);
-  const [isConnected, setIsConnected] = useState(false);
-  const [connectedAddress, setConnectedAddress] = useState<string | undefined>();
+  
+  // Use wagmi to get wallet connection state
+  const { address: connectedAddress, isConnected } = useAccount();
 
   // Check authentication on mount
   useEffect(() => {
@@ -155,17 +156,9 @@ export default function PaymentRequestDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-white h-screen overflow-y-auto flex">
-      {/* Header */}
-      <Header 
-        onWalletConnect={(address: string) => {
-          setIsConnected(true);
-          setConnectedAddress(address);
-        }}
-      />
-
+    <div className="min-h-screen bg-white">
       {/* Main Content - Single Crypto Request Card */}
-      <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <div className="flex flex-col gap-0 max-w-2xl mx-auto">
           <PaymentRequestCard 
             request={request}

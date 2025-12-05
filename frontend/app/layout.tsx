@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Toaster from "./Toaster";
 import Providers from "@/components/WagmiProvider";
+import SidebarWrapper from "@/components/SidebarWrapper";
 
 export const metadata: Metadata = {
-  title: "Xelli - Crypto Requests",
+  title: "Zemme - Crypto Requests",
   description: "Request and send crypto payments easily",
   icons: {
     icon: "/websitelogo.png",
@@ -19,10 +20,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" suppressHydrationWarning>
+      <body className="bg-white" suppressHydrationWarning>
         <Providers>
-          {children}
+          <SidebarWrapper>
+            {children}
+          </SidebarWrapper>
         </Providers>
         <Toaster />
       </body>

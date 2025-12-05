@@ -19,3 +19,4 @@ CREATE INDEX IF NOT EXISTS idx_preferred_wallets_user_chain ON preferred_wallets
 -- Add comment
 COMMENT ON TABLE preferred_wallets IS 'Stores user preferred receiving wallet addresses for each blockchain network';
 
+

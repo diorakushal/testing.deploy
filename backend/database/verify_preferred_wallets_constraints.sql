@@ -29,3 +29,4 @@ FROM information_schema.columns
 WHERE table_name = 'preferred_wallets'
 ORDER BY ordinal_position;
 
+

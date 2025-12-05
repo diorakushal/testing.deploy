@@ -918,20 +918,27 @@ app.get('/api/payment-requests', async (req, res) => {
       if (uniqueUserIds.length > 0) {
         const { data: users, error: usersError } = await supabase
           .from('users')
-          .select('id, username')
+          .select('id, username, first_name, last_name')
           .in('id', uniqueUserIds);
         
         if (!usersError && users) {
-          // Create a map of user_id -> username
-          const usernameMap = {};
+          // Create a map of user_id -> user data
+          const userMap = {};
           users.forEach(user => {
-            usernameMap[user.id] = user.username;
+            userMap[user.id] = {
+              username: user.username,
+              first_name: user.first_name,
+              last_name: user.last_name
+            };
           });
           
-          // Add username to each payment request
+          // Add user data to each payment request
           data.forEach(request => {
-            if (request.requester_user_id && usernameMap[request.requester_user_id]) {
-              request.requester_username = usernameMap[request.requester_user_id];
+            if (request.requester_user_id && userMap[request.requester_user_id]) {
+              const user = userMap[request.requester_user_id];
+              request.requester_username = user.username;
+              request.requester_first_name = user.first_name;
+              request.requester_last_name = user.last_name;
             }
           });
         }
@@ -943,20 +950,27 @@ app.get('/api/payment-requests', async (req, res) => {
         const addressesToFetch = [...new Set(requestsWithoutUsername.map(r => r.requester_address))];
         const { data: usersByAddress, error: usersError } = await supabase
           .from('users')
-          .select('wallet_address, username')
+          .select('wallet_address, username, first_name, last_name')
           .in('wallet_address', addressesToFetch);
         
         if (!usersError && usersByAddress) {
-          // Create a map of address -> username
-          const addressUsernameMap = {};
+          // Create a map of address -> user data
+          const addressUserMap = {};
           usersByAddress.forEach(user => {
-            addressUsernameMap[user.wallet_address?.toLowerCase()] = user.username;
+            addressUserMap[user.wallet_address?.toLowerCase()] = {
+              username: user.username,
+              first_name: user.first_name,
+              last_name: user.last_name
+            };
           });
           
-          // Add username to payment requests that don't have one yet
+          // Add user data to payment requests that don't have one yet
           data.forEach(request => {
-            if (!request.requester_username && addressUsernameMap[request.requester_address?.toLowerCase()]) {
-              request.requester_username = addressUsernameMap[request.requester_address?.toLowerCase()];
+            if (!request.requester_username && addressUserMap[request.requester_address?.toLowerCase()]) {
+              const user = addressUserMap[request.requester_address?.toLowerCase()];
+              request.requester_username = user.username;
+              request.requester_first_name = user.first_name;
+              request.requester_last_name = user.last_name;
             }
           });
         }
@@ -967,20 +981,27 @@ app.get('/api/payment-requests', async (req, res) => {
       if (paidByAddresses.length > 0) {
         const { data: payers, error: payersError } = await supabase
           .from('users')
-          .select('wallet_address, username')
+          .select('wallet_address, username, first_name, last_name')
           .in('wallet_address', paidByAddresses);
         
         if (!payersError && payers) {
-          // Create a map of address -> username for payers
-          const payerUsernameMap = {};
+          // Create a map of address -> user data for payers
+          const payerUserMap = {};
           payers.forEach(user => {
-            payerUsernameMap[user.wallet_address?.toLowerCase()] = user.username;
+            payerUserMap[user.wallet_address?.toLowerCase()] = {
+              username: user.username,
+              first_name: user.first_name,
+              last_name: user.last_name
+            };
           });
           
-          // Add payer username to each payment request
+          // Add payer user data to each payment request
           data.forEach(request => {
-            if (request.paid_by && payerUsernameMap[request.paid_by?.toLowerCase()]) {
-              request.paid_by_username = payerUsernameMap[request.paid_by?.toLowerCase()];
+            if (request.paid_by && payerUserMap[request.paid_by?.toLowerCase()]) {
+              const user = payerUserMap[request.paid_by?.toLowerCase()];
+              request.paid_by_username = user.username;
+              request.paid_by_first_name = user.first_name;
+              request.paid_by_last_name = user.last_name;
             }
           });
         }
@@ -1029,18 +1050,20 @@ app.get('/api/payment-requests/:id', async (req, res) => {
       paidBy: data?.paid_by
     });
     
-    // Fetch username for requester (prefer user_id, fallback to wallet_address)
+    // Fetch user data for requester (prefer user_id, fallback to wallet_address)
     if (data) {
       if (data.requester_user_id) {
         // Fetch by user ID (preferred)
         const { data: user, error: userError } = await supabase
           .from('users')
-          .select('username')
+          .select('username, first_name, last_name')
           .eq('id', data.requester_user_id)
           .maybeSingle();
         
         if (!userError && user) {
           data.requester_username = user.username;
+          data.requester_first_name = user.first_name;
+          data.requester_last_name = user.last_name;
         }
       }
       
@@ -1048,14 +1071,31 @@ app.get('/api/payment-requests/:id', async (req, res) => {
       if (!data.requester_username && data.requester_address) {
         const { data: userByAddress, error: userError } = await supabase
           .from('users')
-          .select('username')
+          .select('username, first_name, last_name')
           .eq('wallet_address', data.requester_address)
           .maybeSingle();
         
         if (!userError && userByAddress) {
           data.requester_username = userByAddress.username;
+          data.requester_first_name = userByAddress.first_name;
+          data.requester_last_name = userByAddress.last_name;
         } else {
           data.requester_username = null;
+        }
+      }
+      
+      // Fetch user data for payer if paid
+      if (data.paid_by) {
+        const { data: payer, error: payerError } = await supabase
+          .from('users')
+          .select('username, first_name, last_name')
+          .eq('wallet_address', data.paid_by)
+          .maybeSingle();
+        
+        if (!payerError && payer) {
+          data.paid_by_username = payer.username;
+          data.paid_by_first_name = payer.first_name;
+          data.paid_by_last_name = payer.last_name;
         }
       }
     }
@@ -1767,7 +1807,7 @@ app.get('/api/payment-sends', async (req, res) => {
 
     console.log('[PaymentSendsAPI] Found payment sends:', data?.length || 0, data);
 
-    // Fetch usernames for sender and recipient
+    // Fetch user data for sender and recipient
     if (data && data.length > 0) {
       const uniqueSenderIds = [...new Set(data.map(s => s.sender_user_id).filter(Boolean))];
       const uniqueRecipientIds = [...new Set(data.map(s => s.recipient_user_id).filter(Boolean))];
@@ -1776,25 +1816,103 @@ app.get('/api/payment-sends', async (req, res) => {
       if (allUserIds.length > 0) {
         const { data: users, error: usersError } = await supabase
           .from('users')
-          .select('id, username')
+          .select('id, username, first_name, last_name')
           .in('id', allUserIds);
         
         if (!usersError && users) {
-          // Create a map of user_id -> username
-          const usernameMap = {};
+          // Create maps of user_id -> user data
+          const userMap = {};
           users.forEach(user => {
-            usernameMap[user.id] = user.username;
+            userMap[user.id] = {
+              username: user.username,
+              first_name: user.first_name,
+              last_name: user.last_name
+            };
           });
           
-          // Add usernames to each payment send
+          // Add user data to each payment send
           data.forEach(send => {
-            if (send.sender_user_id && usernameMap[send.sender_user_id]) {
-              send.sender_username = usernameMap[send.sender_user_id];
+            if (send.sender_user_id && userMap[send.sender_user_id]) {
+              const user = userMap[send.sender_user_id];
+              send.sender_username = user.username;
+              send.sender_first_name = user.first_name;
+              send.sender_last_name = user.last_name;
             }
-            if (send.recipient_user_id && usernameMap[send.recipient_user_id]) {
-              send.recipient_username = usernameMap[send.recipient_user_id];
+            if (send.recipient_user_id && userMap[send.recipient_user_id]) {
+              const user = userMap[send.recipient_user_id];
+              send.recipient_username = user.username;
+              send.recipient_first_name = user.first_name;
+              send.recipient_last_name = user.last_name;
             }
           });
+        }
+      }
+      
+      // Fallback: fetch user data by wallet address for sends without names
+      const sendsNeedingSenderLookup = data.filter(s => 
+        (!s.sender_first_name || !s.sender_last_name) && 
+        s.sender_address
+      );
+      const sendsNeedingRecipientLookup = data.filter(s => 
+        (!s.recipient_first_name || !s.recipient_last_name) && 
+        s.recipient_address
+      );
+      
+      if (sendsNeedingSenderLookup.length > 0 || sendsNeedingRecipientLookup.length > 0) {
+        const addressesToFetch = [
+          ...new Set([
+            ...sendsNeedingSenderLookup.map(s => s.sender_address),
+            ...sendsNeedingRecipientLookup.map(s => s.recipient_address)
+          ])
+        ].filter(Boolean);
+        
+        console.log('[PaymentSendsAPI] 🔍 Looking up users by wallet address:', addressesToFetch);
+        
+        if (addressesToFetch.length > 0) {
+          const { data: usersByAddress, error: usersError } = await supabase
+            .from('users')
+            .select('wallet_address, username, first_name, last_name')
+            .in('wallet_address', addressesToFetch);
+          
+          console.log('[PaymentSendsAPI] 📋 Users found by address:', usersByAddress?.length || 0, usersByAddress);
+          
+          if (!usersError && usersByAddress) {
+            // Create a map of address -> user data (case-insensitive)
+            const addressUserMap = {};
+            usersByAddress.forEach(user => {
+              if (user.wallet_address) {
+                addressUserMap[user.wallet_address.toLowerCase()] = {
+                  username: user.username,
+                  first_name: user.first_name,
+                  last_name: user.last_name
+                };
+              }
+            });
+            
+            // Add user data to payment sends that don't have it yet
+            data.forEach(send => {
+              if (send.sender_address) {
+                const senderKey = send.sender_address.toLowerCase();
+                if ((!send.sender_first_name || !send.sender_last_name) && addressUserMap[senderKey]) {
+                  const user = addressUserMap[senderKey];
+                  send.sender_username = user.username || send.sender_username;
+                  send.sender_first_name = user.first_name || send.sender_first_name;
+                  send.sender_last_name = user.last_name || send.sender_last_name;
+                  console.log('[PaymentSendsAPI] ✅ Added sender name for', send.sender_address, ':', user.first_name, user.last_name);
+                }
+              }
+              if (send.recipient_address) {
+                const recipientKey = send.recipient_address.toLowerCase();
+                if ((!send.recipient_first_name || !send.recipient_last_name) && addressUserMap[recipientKey]) {
+                  const user = addressUserMap[recipientKey];
+                  send.recipient_username = user.username || send.recipient_username;
+                  send.recipient_first_name = user.first_name || send.recipient_first_name;
+                  send.recipient_last_name = user.last_name || send.recipient_last_name;
+                  console.log('[PaymentSendsAPI] ✅ Added recipient name for', send.recipient_address, ':', user.first_name, user.last_name);
+                }
+              }
+            });
+          }
         }
       }
     }

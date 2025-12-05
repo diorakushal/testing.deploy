@@ -1,15 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
 
-interface SettingsModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
-
-export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+export default function SettingsPage() {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -22,65 +19,47 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    if (!isOpen) return;
-
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
+    // Non-blocking auth check - load data in background
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        router.push('/login');
+        return;
       }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-
-    const loadUserData = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          onClose();
-          return;
-        }
-        setUser(session.user);
-        
-        const { data: profile, error } = await supabase
-          .from('users')
-          .select('first_name, last_name, username')
-          .eq('id', session.user.id)
-          .single();
-        
-        if (!error && profile) {
-          setUserProfile(profile);
-          setFormData({
-            firstName: profile.first_name || '',
-            lastName: profile.last_name || '',
-            username: profile.username || '',
-            email: session.user.email || '',
-          });
-        } else {
-          setUserProfile({
-            first_name: session.user.user_metadata?.first_name || '',
-            last_name: session.user.user_metadata?.last_name || '',
-            username: session.user.user_metadata?.username || '',
-          });
-          setFormData({
-            firstName: session.user.user_metadata?.first_name || '',
-            lastName: session.user.user_metadata?.last_name || '',
-            username: session.user.user_metadata?.username || '',
-            email: session.user.email || '',
-          });
-        }
-        setInitialized(true);
-      } catch (error) {
-        console.error('Error loading user data:', error);
-        onClose();
+      setUser(session.user);
+      
+      const { data: profile, error } = await supabase
+        .from('users')
+        .select('first_name, last_name, username')
+        .eq('id', session.user.id)
+        .single();
+      
+      if (!error && profile) {
+        setUserProfile(profile);
+        setFormData({
+          firstName: profile.first_name || '',
+          lastName: profile.last_name || '',
+          username: profile.username || '',
+          email: session.user.email || '',
+        });
+      } else {
+        setUserProfile({
+          first_name: session.user.user_metadata?.first_name || '',
+          last_name: session.user.user_metadata?.last_name || '',
+          username: session.user.user_metadata?.username || '',
+        });
+        setFormData({
+          firstName: session.user.user_metadata?.first_name || '',
+          lastName: session.user.user_metadata?.last_name || '',
+          username: session.user.user_metadata?.username || '',
+          email: session.user.email || '',
+        });
       }
+      setInitialized(true);
     };
 
-    loadUserData();
-
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [isOpen, onClose]);
+    checkAuth();
+  }, [router]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -141,44 +120,43 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     }
   };
 
-  if (!isOpen) return null;
+  // Show form immediately, data will populate when ready
+  if (!initialized) {
+    return (
+      <div className="min-h-screen bg-white">
+        <main className="flex items-center justify-center px-4 py-8 sm:py-12">
+          <div className="w-full max-w-md">
+            <div className="bg-white p-8 sm:p-10">
+              {/* Header */}
+              <div className="mb-8">
+                <h1 className="text-3xl font-bold text-black mb-2">Settings</h1>
+                <p className="text-gray-600 text-sm mt-2">Manage your account settings and profile information.</p>
+              </div>
+              <div className="space-y-6">
+                <div className="h-12 bg-gray-100 rounded-lg animate-pulse"></div>
+                <div className="h-12 bg-gray-100 rounded-lg animate-pulse"></div>
+                <div className="h-12 bg-gray-100 rounded-lg animate-pulse"></div>
+                <div className="h-12 bg-gray-100 rounded-lg animate-pulse"></div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-black bg-opacity-50"
-        onClick={onClose}
-      />
-      
-      {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0">
-          <div>
-            <h2 className="text-2xl font-bold text-black">Settings</h2>
-            <p className="text-gray-600 text-sm mt-1">Manage your account settings</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 flex-1">
-          {!initialized ? (
-            <div className="space-y-6">
-              <div className="h-12 bg-gray-100 rounded-lg animate-pulse"></div>
-              <div className="h-12 bg-gray-100 rounded-lg animate-pulse"></div>
-              <div className="h-12 bg-gray-100 rounded-lg animate-pulse"></div>
-              <div className="h-12 bg-gray-100 rounded-lg animate-pulse"></div>
+    <div className="min-h-screen bg-white">
+      <main className="flex items-center justify-center px-4 py-8 sm:py-12">
+        <div className="w-full max-w-md">
+          <div className="bg-white p-8 sm:p-10">
+            {/* Header */}
+            <div className="mb-8">
+              <h1 className="text-3xl font-bold text-black mb-2">Settings</h1>
+              <p className="text-gray-600 text-sm mt-2">Manage your account settings and profile information.</p>
             </div>
-          ) : (
+
+            {/* Form */}
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* First Name */}
               <div>
@@ -260,9 +238,10 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 {loading ? 'Saving...' : 'Save Changes'}
               </button>
             </form>
-          )}
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
+

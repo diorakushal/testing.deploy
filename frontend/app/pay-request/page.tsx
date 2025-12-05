@@ -2,7 +2,6 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import Header from '@/components/Header';
 import CreateMarketSidebar from '@/components/CreateMarketSidebar';
 import { supabase } from '@/lib/supabase';
 
@@ -65,8 +64,6 @@ export default function PayRequestPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Header />
-      
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <div className="flex justify-center">
           <div className="w-full max-w-md">

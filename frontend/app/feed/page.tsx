@@ -12,7 +12,7 @@
  * 1. REQUIRES AUTHENTICATION - redirects to /login if not authenticated
  * 2. NO MOCK DATA - only shows real data from API (empty state if no data)
  * 3. USES HEADER COMPONENT - must use <Header /> component, NOT custom header
- * 4. XELLI BRANDING - Header component provides "Xelli" branding
+ * 4. ZEMME BRANDING - Header component provides "Zemme" branding
  * 
  * DO NOT:
  * - Add back mock payment request data (mockPaymentRequests array)
@@ -26,12 +26,12 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import axios from 'axios';
 import PaymentRequestCard from '@/components/PaymentRequestCard';
 import PaymentSendCard from '@/components/PaymentSendCard';
-import Header from '@/components/Header'; // REQUIRED - Do not remove or replace with custom header
 import { supabase } from '@/lib/supabase';
+import { useAccount } from 'wagmi';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -58,9 +58,13 @@ interface PaymentSend {
   sender_address: string;
   sender_user_id?: string | null;
   sender_username?: string | null;
+  sender_first_name?: string | null;
+  sender_last_name?: string | null;
   recipient_address: string;
   recipient_user_id?: string | null;
   recipient_username?: string | null;
+  recipient_first_name?: string | null;
+  recipient_last_name?: string | null;
   amount: string | number;
   token_symbol: string;
   token_address: string;
@@ -76,14 +80,17 @@ interface PaymentSend {
 
 export default function Feed() {
   const router = useRouter();
+  const pathname = usePathname();
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([]);
   const [paymentSends, setPaymentSends] = useState<PaymentSend[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isConnected, setIsConnected] = useState(false);
-  const [connectedAddress, setConnectedAddress] = useState<string | undefined>();
   const [user, setUser] = useState<any>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const fetchingRef = useRef(false);
+  const initialLoadRef = useRef(false);
+  
+  // Use wagmi to get wallet connection state
+  const { address: connectedAddress, isConnected } = useAccount();
 
   /**
    * Fetch payment sends from API
@@ -167,14 +174,14 @@ export default function Feed() {
       console.error('[Feed] Error fetching payment sends:', error);
       setPaymentSends([]);
     }
-  }, []);
+  }, [connectedAddress]);
 
   /**
    * Fetch payment requests from API
    * NOTE: No mock data fallback - shows empty state if API fails or returns no data
    * Filters by authenticated user's ID to show only their payment requests
    */
-  const fetchPaymentRequests = useCallback(async () => {
+  const fetchPaymentRequests = useCallback(async (showLoading = false) => {
     // Prevent multiple simultaneous fetches
     if (fetchingRef.current) {
       console.log('Already fetching payment requests, skipping...');
@@ -183,7 +190,10 @@ export default function Feed() {
     
     try {
       fetchingRef.current = true;
-      setLoading(true);
+      // Only show loading on initial load or when explicitly requested
+      if (showLoading || !initialLoadRef.current) {
+        setLoading(true);
+      }
       console.log('[Feed] Starting to fetch payment requests...');
       
       // Get authenticated user ID
@@ -231,6 +241,7 @@ export default function Feed() {
         console.log('Combined payment requests (total):', sortedRequests.length, sortedRequests);
         setPaymentRequests(sortedRequests);
         setLoading(false); // Set loading to false immediately after setting data
+        initialLoadRef.current = true; // Mark initial load as complete
       } else {
         // No user ID - fetch all (shouldn't happen if authenticated)
         console.log('No user ID, fetching all payment requests');
@@ -249,6 +260,7 @@ export default function Feed() {
           setPaymentRequests([]);
         }
         setLoading(false); // Set loading to false after setting data
+        initialLoadRef.current = true; // Mark initial load as complete
       }
     } catch (error: any) {
       console.error('Error fetching payment requests:', error);
@@ -280,24 +292,28 @@ export default function Feed() {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
           if (mounted) {
+            setCheckingAuth(false);
             router.push('/login');
           }
           return;
         }
         if (mounted) {
           setUser(session.user);
+          setCheckingAuth(false); // Set this first so component can render
           // Fetch payment requests and sends after auth is confirmed
-          fetchPaymentRequests();
+          // Only show loading on initial load
+          if (!initialLoadRef.current) {
+            fetchPaymentRequests(true);
+          } else {
+            fetchPaymentRequests(false);
+          }
           fetchPaymentSends();
         }
       } catch (error) {
         console.error('Error checking auth:', error);
         if (mounted) {
-          router.push('/login');
-        }
-      } finally {
-        if (mounted) {
           setCheckingAuth(false);
+          router.push('/login');
         }
       }
     };
@@ -321,7 +337,8 @@ export default function Feed() {
         // Only refetch if user ID actually changed
         if (lastUserId !== currentUserId) {
           setUser(session.user);
-          fetchPaymentRequests();
+          // Don't show loading spinner on auth state changes, just refresh data
+          fetchPaymentRequests(false);
           fetchPaymentSends();
           lastUserId = currentUserId;
         }
@@ -332,19 +349,37 @@ export default function Feed() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [router, fetchPaymentRequests, fetchPaymentSends]); // Include fetch functions to ensure they're available
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]); // Only depend on router - fetch functions are stable with useCallback
 
   // Refresh on focus (when user navigates back to the page)
   useEffect(() => {
     const handleFocus = () => {
       console.log('[Feed] Page focused, refreshing payment sends and requests');
+      // Don't show loading spinner on focus refresh
       fetchPaymentSends();
-      fetchPaymentRequests();
+      fetchPaymentRequests(false);
     };
 
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [fetchPaymentSends, fetchPaymentRequests]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount - functions are stable
+
+  // Refresh data when navigating to this page (pathname changes to /feed)
+  useEffect(() => {
+    if (pathname === '/feed' && user && !checkingAuth) {
+      console.log('[Feed] Navigated to feed page, fetching data');
+      // Only show loading if this is the first time loading
+      if (!initialLoadRef.current) {
+        fetchPaymentRequests(true);
+      } else {
+        fetchPaymentRequests(false);
+      }
+      fetchPaymentSends();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, user, checkingAuth]); // Re-fetch when pathname changes to /feed and user/auth is ready
 
 
   if (checkingAuth) {
@@ -364,14 +399,6 @@ export default function Feed() {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* CRITICAL: Must use Header component - DO NOT create custom header with "numo" */}
-      <Header 
-        onWalletConnect={(address: string) => {
-          setIsConnected(true);
-          setConnectedAddress(address);
-        }}
-      />
-
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <div className="flex flex-col gap-0 max-w-4xl mx-auto">
@@ -409,6 +436,7 @@ export default function Feed() {
                         key={send.id}
                         send={send}
                         userAddress={connectedAddress}
+                        userId={user?.id || null}
                       />
                     );
                   } else {
@@ -419,6 +447,7 @@ export default function Feed() {
                         key={request.id} 
                         request={request}
                         userAddress={connectedAddress}
+                        userId={user?.id || null}
                         onPaymentSuccess={() => {
                           fetchPaymentRequests();
                           fetchPaymentSends();

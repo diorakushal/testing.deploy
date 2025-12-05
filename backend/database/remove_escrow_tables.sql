@@ -97,3 +97,4 @@ ORDER BY table_name;
 -- Expected result: Only payment_requests, payment_sends, and preferred_wallets should remain
 -- escrow_payments and payment_intents should be gone
 
+

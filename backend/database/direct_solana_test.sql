@@ -51,3 +51,4 @@ FROM preferred_wallets
 GROUP BY chain_id
 ORDER BY chain_id;
 
+

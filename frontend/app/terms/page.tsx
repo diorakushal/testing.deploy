@@ -2,12 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
-interface TermsModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-}
-
-export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
+export default function TermsPage() {
   const [lastUpdated, setLastUpdated] = useState<string>('');
 
   useEffect(() => {
@@ -15,89 +10,52 @@ export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
     setLastUpdated(new Date().toLocaleDateString());
   }, []);
 
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div 
-        className="absolute inset-0 bg-black bg-opacity-50"
-        onClick={onClose}
-      />
-      
-      {/* Modal */}
-      <div className="relative bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-        {/* Header */}
-        <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between flex-shrink-0">
+    <div className="min-h-screen bg-white">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
+        <div className="space-y-6">
           <div>
-            <h2 className="text-xl font-bold text-black">Terms of Use</h2>
-            <p className="text-gray-600 text-xs mt-1">
+            <h1 className="text-3xl font-bold text-black mb-2">Terms of Use</h1>
+            <p className="text-gray-600 text-sm">
               <strong>Last Updated:</strong> {lastUpdated || 'Loading...'}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
 
-        {/* Content */}
-        <div className="p-4 space-y-2 flex-1 text-xs">
           <section>
-            <p className="text-gray-700 leading-relaxed text-xs">
+            <p className="text-gray-700 leading-relaxed">
               Welcome to Zemme. These Terms of Use ("Terms") govern your access to and use of the Zemme platform 
               ("Platform", "Service", "we", "us", or "our"). By using Zemme, you agree to be bound by these Terms.
             </p>
           </section>
 
           <section>
-            <h3 className="text-sm font-bold text-black mb-2">1. Acceptance of Terms</h3>
-            <p className="text-gray-700 leading-relaxed text-xs">
+            <h2 className="text-xl font-bold text-black mb-3">1. Acceptance of Terms</h2>
+            <p className="text-gray-700 leading-relaxed text-sm">
               By accessing or using Zemme, you acknowledge that you have read, understood, and agree to be bound by 
               these Terms and our Privacy Policy. If you do not agree to these Terms, you may not use the Service.
             </p>
           </section>
 
           <section>
-            <h3 className="text-sm font-bold text-black mb-2">2. Description of Service</h3>
-            <p className="text-gray-700 leading-relaxed text-xs mb-1">
+            <h2 className="text-xl font-bold text-black mb-3">2. Description of Service</h2>
+            <p className="text-gray-700 leading-relaxed text-sm mb-2">
               Zemme is a non-custodial cryptocurrency payment platform that enables:
             </p>
-            <ul className="list-disc list-inside text-gray-700 text-xs space-y-0.5 ml-4">
+            <ul className="list-disc list-inside text-gray-700 text-sm space-y-1 ml-4">
               <li>Creating and managing payment requests</li>
               <li>Sending and receiving direct cryptocurrency payments</li>
               <li>Managing user profiles and payment history</li>
               <li>Interacting with multiple blockchain networks</li>
             </ul>
-            <p className="text-gray-700 leading-relaxed text-xs mt-2">
+            <p className="text-gray-700 leading-relaxed text-sm mt-3">
               Zemme does not hold, custody, or control your cryptocurrency. All transactions occur directly between 
               user wallets through blockchain networks.
             </p>
           </section>
 
           <section>
-            <h3 className="text-sm font-bold text-black mb-2">3. Eligibility</h3>
-            <p className="text-gray-700 leading-relaxed text-xs">
+            <h2 className="text-xl font-bold text-black mb-3">3. Eligibility</h2>
+            <p className="text-gray-700 leading-relaxed text-sm">
               You must be at least 18 years old and have the legal capacity to enter into contracts in your jurisdiction. 
               You are responsible for ensuring that your use of Zemme complies with all applicable laws and regulations 
               in your jurisdiction.
@@ -105,8 +63,8 @@ export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
           </section>
 
           <section>
-            <h3 className="text-sm font-bold text-black mb-2">4. User Accounts</h3>
-            <div className="space-y-1 text-gray-700 text-xs">
+            <h2 className="text-xl font-bold text-black mb-3">4. User Accounts</h2>
+            <div className="space-y-2 text-gray-700 text-sm">
               <p>
                 <strong>4.1 Account Creation:</strong> You must provide accurate and complete information when creating 
                 an account. You are responsible for maintaining the security of your account credentials.
@@ -123,8 +81,8 @@ export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
           </section>
 
           <section>
-            <h3 className="text-sm font-bold text-black mb-2">5. Wallet Connection</h3>
-            <div className="space-y-1 text-gray-700 text-xs">
+            <h2 className="text-xl font-bold text-black mb-3">5. Wallet Connection</h2>
+            <div className="space-y-2 text-gray-700 text-sm">
               <p>
                 <strong>5.1 Wallet Security:</strong> You are solely responsible for the security of your connected 
                 cryptocurrency wallet and private keys. Zemme never has access to your private keys or wallet funds.
@@ -141,8 +99,8 @@ export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
           </section>
 
           <section>
-            <h3 className="text-sm font-bold text-black mb-2">6. Payments and Transactions</h3>
-            <div className="space-y-1 text-gray-700 text-xs">
+            <h2 className="text-xl font-bold text-black mb-3">6. Payments and Transactions</h2>
+            <div className="space-y-2 text-gray-700 text-sm">
               <p>
                 <strong>6.1 Payment Requests:</strong> When you create a payment request, you authorize others to send 
                 payments to your wallet address. Payment requests are public and can be accepted by anyone.
@@ -163,11 +121,11 @@ export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
           </section>
 
           <section>
-            <h3 className="text-sm font-bold text-black mb-2">7. Prohibited Uses</h3>
-            <p className="text-gray-700 leading-relaxed text-xs mb-1">
+            <h2 className="text-xl font-bold text-black mb-3">7. Prohibited Uses</h2>
+            <p className="text-gray-700 leading-relaxed text-sm mb-2">
               You agree not to use Zemme to:
             </p>
-            <ul className="list-disc list-inside text-gray-700 text-xs space-y-0.5 ml-4">
+            <ul className="list-disc list-inside text-gray-700 text-sm space-y-1 ml-4">
               <li>Violate any applicable laws or regulations</li>
               <li>Engage in fraud, money laundering, or other illegal activities</li>
               <li>Impersonate others or provide false information</li>
@@ -178,8 +136,8 @@ export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
           </section>
 
           <section>
-            <h3 className="text-sm font-bold text-black mb-2">8. Smart Contracts</h3>
-            <p className="text-gray-700 leading-relaxed text-xs">
+            <h2 className="text-xl font-bold text-black mb-3">8. Smart Contracts</h2>
+            <p className="text-gray-700 leading-relaxed text-sm">
               Zemme uses smart contracts deployed on various blockchain networks. While we strive to use audited and 
               secure contracts, smart contracts are experimental technology. You acknowledge the risks associated with 
               smart contract interactions, including potential bugs, vulnerabilities, or failures.
@@ -187,8 +145,8 @@ export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
           </section>
 
           <section>
-            <h3 className="text-sm font-bold text-black mb-2">9. Disclaimers</h3>
-            <div className="space-y-1 text-gray-700 text-xs">
+            <h2 className="text-xl font-bold text-black mb-3">9. Disclaimers</h2>
+            <div className="space-y-2 text-gray-700 text-sm">
               <p>
                 <strong>9.1 No Warranty:</strong> Zemme is provided "as is" and "as available" without warranties of 
                 any kind, either express or implied.
@@ -205,8 +163,8 @@ export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
           </section>
 
           <section>
-            <h3 className="text-sm font-bold text-black mb-2">10. Limitation of Liability</h3>
-            <p className="text-gray-700 leading-relaxed text-xs">
+            <h2 className="text-xl font-bold text-black mb-3">10. Limitation of Liability</h2>
+            <p className="text-gray-700 leading-relaxed text-sm">
               To the maximum extent permitted by law, Zemme and its operators shall not be liable for any indirect, 
               incidental, special, consequential, or punitive damages, or any loss of profits or revenues, whether 
               incurred directly or indirectly, or any loss of data, use, goodwill, or other intangible losses resulting 
@@ -215,8 +173,8 @@ export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
           </section>
 
           <section>
-            <h3 className="text-sm font-bold text-black mb-2">11. Indemnification</h3>
-            <p className="text-gray-700 leading-relaxed text-xs">
+            <h2 className="text-xl font-bold text-black mb-3">11. Indemnification</h2>
+            <p className="text-gray-700 leading-relaxed text-sm">
               You agree to indemnify, defend, and hold harmless Zemme and its operators from any claims, damages, 
               losses, liabilities, and expenses (including legal fees) arising from your use of the Service, violation 
               of these Terms, or infringement of any rights of another.
@@ -224,8 +182,8 @@ export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
           </section>
 
           <section>
-            <h3 className="text-sm font-bold text-black mb-2">12. Modifications to Terms</h3>
-            <p className="text-gray-700 leading-relaxed text-xs">
+            <h2 className="text-xl font-bold text-black mb-3">12. Modifications to Terms</h2>
+            <p className="text-gray-700 leading-relaxed text-sm">
               We reserve the right to modify these Terms at any time. We will notify users of material changes via 
               email or through the Service. Your continued use of Zemme after changes become effective constitutes 
               acceptance of the modified Terms.
@@ -233,22 +191,23 @@ export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
           </section>
 
           <section>
-            <h3 className="text-sm font-bold text-black mb-2">13. Termination</h3>
-            <p className="text-gray-700 leading-relaxed text-xs">
+            <h2 className="text-xl font-bold text-black mb-3">13. Termination</h2>
+            <p className="text-gray-700 leading-relaxed text-sm">
               We may suspend or terminate your access to Zemme at any time, with or without cause or notice, for any 
               reason including violation of these Terms. You may stop using the Service at any time.
             </p>
           </section>
 
           <section>
-            <h3 className="text-sm font-bold text-black mb-2">14. Contact Information</h3>
-            <p className="text-gray-700 leading-relaxed text-xs">
+            <h2 className="text-xl font-bold text-black mb-3">14. Contact Information</h2>
+            <p className="text-gray-700 leading-relaxed text-sm">
               If you have questions about these Terms, please contact us through the platform or at the contact 
               information provided in our Privacy Policy.
             </p>
           </section>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
+

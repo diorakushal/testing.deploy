@@ -160,3 +160,4 @@ SELECT
     COUNT(DISTINCT requester_address) AS unique_requester_addresses
 FROM payment_requests;
 
+

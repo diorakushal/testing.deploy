@@ -43,7 +43,7 @@ This guide explains how to configure Supabase to send confirmation emails for us
    - **SMTP User**: Your email address
    - **SMTP Password**: Your email password or app password
    - **Sender email**: The email address that will send confirmations
-   - **Sender name**: Display name (e.g., "Xelli")
+   - **Sender name**: Display name (e.g., "Zemme")
 
 ### Recommended SMTP Providers:
 - **SendGrid**: Free tier: 100 emails/day

@@ -19,3 +19,4 @@ CREATE INDEX IF NOT EXISTS idx_preferred_wallets_user ON preferred_wallets(user_
 CREATE INDEX IF NOT EXISTS idx_preferred_wallets_chain ON preferred_wallets(chain_id);
 CREATE INDEX IF NOT EXISTS idx_preferred_wallets_user_chain ON preferred_wallets(user_id, chain_id);
 
+

@@ -38,7 +38,7 @@ export default function DocumentationModal({ isOpen, onClose }: DocumentationMod
             <section>
               <h3 className="text-lg font-bold text-black mb-3">Overview</h3>
               <p className="text-gray-700 leading-relaxed text-sm">
-                Xelli is a non-custodial cryptocurrency payment platform that enables seamless wallet-to-wallet transactions. 
+                Zemme is a non-custodial cryptocurrency payment platform that enables seamless wallet-to-wallet transactions. 
                 Create payment requests, send direct payments, and manage your crypto payments across multiple blockchain networks.
               </p>
             </section>

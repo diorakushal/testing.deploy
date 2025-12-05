@@ -30,7 +30,7 @@ export default function CheckEmailPage() {
         <Link href="/feed" className="inline-block bg-white">
           <img 
             src="/applogo.png" 
-            alt="Xelli" 
+            alt="Zemme" 
             className="w-10 h-10 object-contain bg-white"
             style={{ backgroundColor: '#ffffff' }}
           />

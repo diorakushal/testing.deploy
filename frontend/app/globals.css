@@ -1,3 +1,7 @@
+/* Note: Athletics and Scto Grotesk are custom fonts. 
+   If you have the font files, add @font-face declarations here.
+   For now, using Inter as Athletics fallback and Space Grotesk as Scto Grotesk fallback. */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -6,6 +10,21 @@ body {
   background: #000000;
   margin: 0;
   padding: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* Cash Sans style font - Primary font for Zemme branding (similar to Cash App) */
+.font-zemme {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-style: normal;
+}
+
+/* Scto Grotesk font - Secondary font */
+.font-scto {
+  font-family: 'Scto Grotesk', 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  font-weight: 400;
 }
 
 html {
@@ -129,6 +148,18 @@ html {
 
 [data-rk] button[data-testid="rk-connect-button"]:hover {
   background: #f9fafb !important; /* Light gray on hover */
+}
+
+/* Connect Button in Dark Sidebar */
+aside [data-rk] button[data-testid="rk-connect-button"] {
+  width: 100% !important;
+  justify-content: center !important;
+  background: #374151 !important; /* Gray-700 */
+  color: #ffffff !important;
+}
+
+aside [data-rk] button[data-testid="rk-connect-button"]:hover {
+  background: #4b5563 !important; /* Gray-600 */
 }
 
 /* Network Selector Button */

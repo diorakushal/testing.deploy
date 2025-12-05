@@ -30,3 +30,4 @@ FROM public.users u
 WHERE pr.requester_address = u.wallet_address
   AND pr.requester_user_id IS NULL;
 
+

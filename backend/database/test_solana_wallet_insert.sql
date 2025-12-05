@@ -88,3 +88,4 @@ FROM preferred_wallets
 ORDER BY created_at DESC
 LIMIT 5;
 
+
