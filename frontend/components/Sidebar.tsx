@@ -289,7 +289,7 @@ export default function Sidebar({ onWalletConnect }: SidebarProps) {
                 className="w-8 h-8 object-contain"
               />
             </div>
-            <h1 className="text-xl font-bold text-white" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', letterSpacing: '-0.02em' }}>Zemme</h1>
+            <h1 className="text-xl font-bold text-white" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', letterSpacing: '-0.02em' }}>zemme</h1>
           </Link>
         </div>
 

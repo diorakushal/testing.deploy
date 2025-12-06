@@ -21,9 +21,10 @@ interface PreferredWalletsModalProps {
   isOpen: boolean;
   onClose: () => void;
   userId: string;
+  mandatory?: boolean; // If true, modal cannot be closed until at least one wallet is set up
 }
 
-export default function PreferredWalletsModal({ isOpen, onClose, userId }: PreferredWalletsModalProps) {
+export default function PreferredWalletsModal({ isOpen, onClose, userId, mandatory = false }: PreferredWalletsModalProps) {
   const { address, isConnected } = useAccount();
   const { switchChain } = useSwitchChain();
   const currentChainId = useChainId();
@@ -332,7 +333,7 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId }: Prefe
       {/* Backdrop */}
       <div 
         className="absolute inset-0 bg-black/50"
-        onClick={onClose}
+        onClick={mandatory ? undefined : onClose}
       />
       
       {/* Modal */}
@@ -340,14 +341,16 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId }: Prefe
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 bg-white flex-shrink-0 border-b border-gray-200">
           <h2 className="text-lg font-bold text-black tracking-tight">Set Preferred Wallets</h2>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-50 rounded-full transition-colors"
-          >
-            <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+          {!mandatory && (
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-50 rounded-full transition-colors"
+            >
+              <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Content */}
@@ -484,9 +487,16 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId }: Prefe
         <div className="px-6 py-4 border-t border-gray-200">
           <button
             onClick={onClose}
-            className="w-full px-4 py-2 bg-gray-200 text-black rounded-full hover:bg-gray-300 transition-colors font-semibold text-sm"
+            disabled={mandatory && preferredWallets.length === 0}
+            className={`w-full px-4 py-2 rounded-full transition-colors font-semibold text-sm ${
+              mandatory && preferredWallets.length === 0
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                : 'bg-gray-200 text-black hover:bg-gray-300'
+            }`}
           >
-            Done
+            {mandatory && preferredWallets.length === 0 
+              ? 'Add at least one wallet to continue' 
+              : 'Done'}
           </button>
         </div>
       </div>

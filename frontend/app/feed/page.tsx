@@ -127,20 +127,35 @@ export default function Feed() {
         return;
       }
 
-      // Also get user's wallet address as fallback
-      let walletAddress = connectedAddress;
+      // Get user's wallet address from database (only use if it's actually stored in user profile)
+      // This prevents showing transactions from wallets that aren't associated with this user account
+      let userWalletAddress: string | null = null;
       try {
-        const { data: { user: userData } } = await supabase.auth.getUser();
-        walletAddress = userData?.user_metadata?.wallet_address || connectedAddress;
+        const { data: userProfile, error: profileError } = await supabase
+          .from('users')
+          .select('wallet_address')
+          .eq('id', userId)
+          .single();
+        
+        if (!profileError && userProfile?.wallet_address) {
+          userWalletAddress = userProfile.wallet_address.toLowerCase();
+        }
       } catch (err) {
-        console.error('[Feed] Error getting user data:', err);
+        console.error('[Feed] Error getting user profile:', err);
       }
       
-      console.log('[Feed] Fetching payment sends with userId:', userId, 'walletAddress:', walletAddress);
+      // Only use connected wallet address if it matches the user's stored wallet address
+      // This ensures we don't show transactions from wallets that aren't associated with this account
+      const walletAddress = userWalletAddress && connectedAddress && 
+        connectedAddress.toLowerCase() === userWalletAddress 
+        ? userWalletAddress 
+        : userWalletAddress; // Only use stored wallet address, not just any connected wallet
+      
+      console.log('[Feed] Fetching payment sends with userId:', userId, 'walletAddress:', walletAddress, 'connectedAddress:', connectedAddress);
 
       // Fetch sends where user is sender OR recipient
-      // Try both user_id and wallet address to catch all payments
-      const [fromUser, toUser, fromAddress, toAddress] = await Promise.all([
+      // Only fetch by wallet address if it's actually stored in the user's profile
+      const fetchPromises = [
         axios.get(`${API_URL}/payment-sends`, {
           params: { sender_user_id: userId },
           timeout: 10000
@@ -154,28 +169,41 @@ export default function Feed() {
         }).catch((err) => {
           console.error('[Feed] Error fetching sends TO user (by ID):', err);
           return { data: [] };
-        }),
-        // Fallback: fetch by wallet address if available
-        walletAddress ? axios.get(`${API_URL}/payment-sends`, {
-          params: { sender_address: walletAddress },
-          timeout: 10000
-        }).catch((err) => {
-          console.error('[Feed] Error fetching sends FROM user (by address):', err);
-          return { data: [] };
-        }) : Promise.resolve({ data: [] }),
-        walletAddress ? axios.get(`${API_URL}/payment-sends`, {
-          params: { recipient_address: walletAddress },
-          timeout: 10000
-        }).catch((err) => {
-          console.error('[Feed] Error fetching sends TO user (by address):', err);
-          return { data: [] };
-        }) : Promise.resolve({ data: [] })
-      ]);
+        })
+      ];
+
+      // Only add wallet address queries if wallet is actually associated with this user
+      if (walletAddress) {
+        fetchPromises.push(
+          axios.get(`${API_URL}/payment-sends`, {
+            params: { sender_address: walletAddress },
+            timeout: 10000
+          }).catch((err) => {
+            console.error('[Feed] Error fetching sends FROM user (by address):', err);
+            return { data: [] };
+          }),
+          axios.get(`${API_URL}/payment-sends`, {
+            params: { recipient_address: walletAddress },
+            timeout: 10000
+          }).catch((err) => {
+            console.error('[Feed] Error fetching sends TO user (by address):', err);
+            return { data: [] };
+          })
+        );
+      }
+
+      const results = await Promise.all(fetchPromises);
+      const fromUser = results[0];
+      const toUser = results[1];
+      const fromAddress = results[2] || { data: [] };
+      const toAddress = results[3] || { data: [] };
 
       console.log('[Feed] Payment sends FROM user (by ID):', fromUser.data?.length || 0, fromUser.data);
       console.log('[Feed] Payment sends TO user (by ID):', toUser.data?.length || 0, toUser.data);
-      console.log('[Feed] Payment sends FROM user (by address):', fromAddress.data?.length || 0, fromAddress.data);
-      console.log('[Feed] Payment sends TO user (by address):', toAddress.data?.length || 0, toAddress.data);
+      if (walletAddress) {
+        console.log('[Feed] Payment sends FROM user (by address):', fromAddress.data?.length || 0, fromAddress.data);
+        console.log('[Feed] Payment sends TO user (by address):', toAddress.data?.length || 0, toAddress.data);
+      }
 
       const allSends = [...(fromUser.data || []), ...(toUser.data || []), ...(fromAddress.data || []), ...(toAddress.data || [])];
       const uniqueSends = Array.from(

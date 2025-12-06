@@ -554,18 +554,19 @@ export default function Header({ onWalletConnect }: HeaderProps) {
 
   return (
     <>
-      <header className="bg-white z-50 sticky top-0 border-b border-gray-200">
+      <header className="bg-white z-50">
         <div className="mx-auto px-4 sm:px-6 max-w-7xl">
-          <div className="flex items-center gap-3 py-3.5">
+          <div className="flex items-center gap-3 py-3.5 border-b border-gray-200">
             {/* Logo */}
-            <div className="flex items-center flex-shrink-0 bg-white">
-              <Link href="/feed" className="inline-block bg-white">
+            <div className="flex items-center flex-shrink-0 bg-white gap-3">
+              <Link href="/feed" className="inline-flex items-center gap-3 bg-white">
                 <img 
                   src="/applogo.png" 
                   alt="Zemme" 
                   className="w-12 h-12 object-contain bg-white"
                   style={{ backgroundColor: '#ffffff' }}
                 />
+                <h1 className="text-xl font-bold text-black" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', letterSpacing: '-0.02em' }}>zemme</h1>
               </Link>
             </div>
 
@@ -921,6 +922,15 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                         Set Preferred Wallets
                       </Link>
 
+                      {/* Contacts */}
+                      <Link
+                        href="/settings?tab=contacts"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors block"
+                      >
+                        Contacts
+                      </Link>
+
                       {/* Documentation */}
                       <Link
                         href="/settings?tab=documentation"
@@ -971,7 +981,7 @@ export default function Header({ onWalletConnect }: HeaderProps) {
 
         {/* Subheader Navigation */}
         {loading ? null : user ? (
-          <div className="bg-white">
+          <div className="bg-white border-t border-gray-200 pt-3 pb-3">
             <div className="mx-auto px-4 sm:px-6 max-w-7xl flex justify-center">
               <div className="flex items-center bg-gray-100 rounded-full p-1 gap-1">
                 {/* Activity */}

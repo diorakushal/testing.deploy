@@ -439,13 +439,14 @@ export default function SignUpPage() {
           <div className="bg-white p-8 sm:p-10">
             {/* Logo */}
             <div className="mb-6 bg-white">
-              <Link href="/feed" className="inline-block bg-white">
+              <Link href="/feed" className="inline-flex items-center gap-3 bg-white">
                 <img 
                   src="/applogo.png" 
                   alt="Zemme" 
                   className="w-16 h-16 object-contain bg-white"
                   style={{ backgroundColor: '#ffffff' }}
                 />
+                <h1 className="text-2xl font-bold text-black" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', letterSpacing: '-0.02em' }}>zemme</h1>
               </Link>
             </div>
             

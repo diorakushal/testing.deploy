@@ -110,6 +110,10 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [selectedRecipient, setSelectedRecipient] = useState<{ id: string; username: string; displayName: string; walletAddress?: string } | null>(null);
   const [searchingUsers, setSearchingUsers] = useState(false);
+  const [preferredWallets, setPreferredWallets] = useState<any[]>([]);
+  const [selectedPreferredWallet, setSelectedPreferredWallet] = useState<any | null>(null);
+  const [showPreferredWalletModal, setShowPreferredWalletModal] = useState(false);
+  const [pendingUserSelection, setPendingUserSelection] = useState<{ id: string; username: string; displayName: string } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -226,6 +230,57 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
       }
     };
   }, [formData.to, userId, selectedRecipient, mode]);
+
+  // Auto-select user when initialTo is provided and search results are available
+  useEffect(() => {
+    if (initialTo && !selectedRecipient && searchResults.length > 0 && !searchingUsers) {
+      const cleanTo = initialTo.replace(/^@+/, '').trim();
+      const matchingUser = searchResults.find((u: any) => 
+        u.username?.toLowerCase() === cleanTo.toLowerCase()
+      );
+      if (matchingUser) {
+        // Auto-select the user to trigger preferred wallets modal
+        handleUserSelection(matchingUser);
+      }
+    }
+  }, [searchResults, initialTo, selectedRecipient, searchingUsers]);
+
+  // Helper function to handle user selection (extracted from onClick handler)
+  const handleUserSelection = async (user: any) => {
+    const displayName = (user.first_name && user.last_name)
+      ? `${user.first_name} ${user.last_name}`
+      : user.first_name || user.displayName || user.email?.split('@')[0] || 'User';
+
+    try {
+      setLoading(true);
+      
+      // Fetch preferred wallets for this user
+      const response = await axios.get(`${API_URL}/preferred-wallets/user/${user.id}`);
+      const wallets = response.data || [];
+      
+      if (wallets.length === 0) {
+        toast.error('This user has no preferred wallets set up. They need to configure their preferred wallets first.');
+        setLoading(false);
+        return;
+      }
+      
+      // Set preferred wallets and show modal
+      setPreferredWallets(wallets);
+      setPendingUserSelection({
+        id: user.id,
+        username: user.username || '',
+        displayName: displayName
+      });
+      setShowSearchResults(false);
+      setShowPreferredWalletModal(true);
+      setLoading(false);
+    } catch (error: any) {
+      console.error('Error fetching preferred wallets:', error);
+      toast.error(error.response?.data?.error || 'Could not fetch preferred wallets for this user');
+      setLoading(false);
+      return;
+    }
+  };
 
   // Update loading state based on transaction status
   useEffect(() => {
@@ -429,6 +484,10 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
         setFormData({ amount: '', to: '', caption: '', chainId: (chainId || 8453) as number | string, tokenSymbol: 'USDC' });
         setCharCount(0);
         setSelectedRecipient(null);
+        setPreferredWallets([]);
+        setSelectedPreferredWallet(null);
+        setPendingUserSelection(null);
+        setShowPreferredWalletModal(false);
         setPaymentSendId(null);
         processedHashRef.current = null; // Reset processed hash when form resets
         setStep('form');
@@ -675,8 +734,9 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
           // Provide user-friendly error messages
           let errorMessage = 'Failed to send payment';
           if (error?.message?.includes('transfer amount exceeds balance') || 
-              error?.message?.includes('exceeds balance')) {
-            errorMessage = `Insufficient balance. You don't have enough ${selectedToken.symbol} to send this amount.`;
+              error?.message?.includes('exceeds balance') ||
+              error?.message?.includes('ERC20: transfer amount exceeds balance')) {
+            errorMessage = 'Insufficient balance';
           } else if (error?.message?.includes('user rejected') || 
                      error?.message?.includes('User rejected')) {
             errorMessage = 'Transaction was cancelled';
@@ -744,6 +804,10 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
       setFormData({ amount: '', to: '', caption: '', chainId: (chainId || 8453) as number | string, tokenSymbol: 'USDC' });
       setCharCount(0);
       setSelectedRecipient(null);
+      setPreferredWallets([]);
+      setSelectedPreferredWallet(null);
+      setPendingUserSelection(null);
+      setShowPreferredWalletModal(false);
       
       // Refresh the feed after a short delay to ensure backend has processed the request
       console.log('Request created successfully, refreshing feed...');
@@ -770,6 +834,45 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
     } else {
       await handleRequestSubmit();
     }
+  };
+
+  const handlePreferredWalletSelect = (wallet: any) => {
+    if (!pendingUserSelection) return;
+    
+    setSelectedPreferredWallet(wallet);
+    const chainIdNum = typeof wallet.chain_id === 'string' ? parseInt(wallet.chain_id) : wallet.chain_id;
+    const allChainTokens = getTokensForChain(chainIdNum);
+    const stablecoins = allChainTokens.filter(token => token.symbol === 'USDC' || token.symbol === 'USDT');
+    const defaultToken = stablecoins.find(t => t.symbol === formData.tokenSymbol)?.symbol || stablecoins[0]?.symbol || 'USDC';
+    
+    // Update form data with chain from selected wallet
+    setFormData({ 
+      ...formData, 
+      chainId: chainIdNum,
+      tokenSymbol: defaultToken,
+      to: pendingUserSelection.username
+    });
+    
+    // Set recipient with wallet address
+    setSelectedRecipient({
+      id: pendingUserSelection.id,
+      username: pendingUserSelection.username,
+      displayName: pendingUserSelection.displayName,
+      walletAddress: wallet.receiving_wallet_address
+    });
+    
+    // Also switch chain in header if it's an EVM chain and wallet is connected
+    if (isConnected && typeof chainIdNum === 'number' && switchChain && chainIdNum !== chainId) {
+      try {
+        switchChain({ chainId: chainIdNum as any });
+      } catch (error) {
+        console.error('Error switching chain:', error);
+      }
+    }
+    
+    // Close modal
+    setShowPreferredWalletModal(false);
+    setPendingUserSelection(null);
   };
 
   return (
@@ -808,50 +911,11 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
         </div>
       </div>
 
-      {/* Header with chain selector */}
-      <div className="flex items-center justify-center gap-2 mb-5 pb-3 border-b border-gray-200 w-full">
+      {/* Header */}
+      <div className="flex items-center justify-center mb-5 pb-3 border-b border-gray-200 w-full">
         <h3 className="text-lg font-bold text-black tracking-tight">
           {mode === 'pay' ? 'Pay crypto' : 'Request crypto'}
         </h3>
-        <div className="relative">
-          <select
-            value={formData.chainId}
-            onChange={(e) => {
-              const newChainId = parseInt(e.target.value);
-              const allChainTokens = getTokensForChain(newChainId);
-              const stablecoins = allChainTokens.filter(token => token.symbol === 'USDC' || token.symbol === 'USDT');
-              const defaultToken = stablecoins.find(t => t.symbol === formData.tokenSymbol)?.symbol || stablecoins[0]?.symbol || 'USDC';
-              
-              // Update form data
-              setFormData({ 
-                ...formData, 
-                chainId: newChainId,
-                tokenSymbol: defaultToken
-              });
-              
-              // Also switch chain in header if it's an EVM chain and wallet is connected
-              if (isConnected && typeof newChainId === 'number' && switchChain && newChainId !== chainId) {
-                try {
-                  switchChain({ chainId: newChainId as any });
-                } catch (error) {
-                  console.error('Error switching chain:', error);
-                  // Don't show error toast here as the form chain can still be different from header chain
-                }
-              }
-            }}
-            className="appearance-none px-3 py-1.5 pr-8 rounded-full border border-gray-300 bg-transparent text-sm font-semibold focus:outline-none focus:border-black transition-colors cursor-pointer text-gray-700"
-            disabled={loading}
-          >
-            {AVAILABLE_CHAINS.map(chain => (
-              <option key={chain.id} value={chain.id}>
-                {chain.name}
-              </option>
-            ))}
-          </select>
-          <svg className="w-4 h-4 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
-          </svg>
-        </div>
       </div>
       
       {step === 'success' ? (
@@ -868,52 +932,6 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-0 w-full">
-          {/* Amount Input - Top */}
-          <div className="relative pb-4 mb-4 w-full">
-            <div className="flex items-baseline gap-2 border-b border-gray-200 pb-3">
-              <input
-                type="number"
-                value={formData.amount}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  if (value === '' || (!isNaN(parseFloat(value)) && parseFloat(value) >= 0)) {
-                    setFormData({ ...formData, amount: value });
-                  }
-                }}
-                className="flex-1 min-w-0 px-0 py-2 border-0 bg-transparent placeholder-gray-400 text-2xl font-semibold focus:outline-none focus:border-gray-400 transition-colors text-black [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
-                placeholder="0.00"
-                step="0.01"
-                min="0.01"
-                required
-                disabled={loading}
-              />
-              {/* Token Selector */}
-              <div className="relative flex-shrink-0">
-                <select
-                  value={formData.tokenSymbol}
-                  onChange={(e) => {
-                    const newToken = availableTokens.find(t => t.symbol === e.target.value);
-                    if (newToken) {
-                      setFormData({ ...formData, tokenSymbol: e.target.value });
-                    }
-                  }}
-                  className="appearance-none px-2.5 py-1.5 pr-6 rounded-full border border-gray-300 bg-transparent text-sm font-semibold focus:outline-none focus:border-black transition-colors cursor-pointer text-gray-700 whitespace-nowrap"
-                  disabled={loading}
-                  style={{ minWidth: 'fit-content' }}
-                >
-                  {availableTokens.map(token => (
-                    <option key={token.symbol} value={token.symbol}>
-                      {token.symbol}
-                    </option>
-                  ))}
-                </select>
-                <svg className="w-3 h-3 text-gray-400 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
-                </svg>
-              </div>
-            </div>
-          </div>
-
           {/* To Field - Show for both modes, but required for Pay mode */}
           <div className="mb-4 w-full relative" style={{ position: 'relative' }}>
             <label className="block text-sm font-medium text-gray-700 mb-2">To</label>
@@ -933,6 +951,10 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
                   // If user clears the username, clear selection
                   if (selectedRecipient && value !== selectedRecipient.username) {
                     setSelectedRecipient(null);
+                    setPreferredWallets([]);
+                    setSelectedPreferredWallet(null);
+                    setPendingUserSelection(null);
+                    setShowPreferredWalletModal(false);
                   }
                   setFormData({ ...formData, to: value });
                   
@@ -987,6 +1009,10 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
                   type="button"
                   onClick={() => {
                     setSelectedRecipient(null);
+                    setPreferredWallets([]);
+                    setSelectedPreferredWallet(null);
+                    setPendingUserSelection(null);
+                    setShowPreferredWalletModal(false);
                     setFormData({ ...formData, to: '' });
                   }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
@@ -1071,65 +1097,7 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
                               // Prevent blur from firing before click
                               e.preventDefault();
                             }}
-                            onClick={async () => {
-                            // For REQUEST mode: We don't need wallet address, just set the recipient
-                            // For PAY mode: We need to fetch preferred wallet address for the selected chain
-                            if (mode === 'request') {
-                              // Just set the recipient - no wallet address needed for requests
-                              setSelectedRecipient({
-                                id: user.id,
-                                username: user.username || '',
-                                displayName: displayName,
-                                walletAddress: undefined // Not needed for requests
-                              });
-                              setFormData({ ...formData, to: user.username || '' });
-                              setShowSearchResults(false);
-                              return;
-                            }
-                            
-                            // For PAY mode: Fetch preferred wallet address for the selected chain
-                            if (mode === 'pay') {
-                              try {
-                                setLoading(true);
-                                
-                                // Get the chain ID for the current selection
-                                const targetChainId = formData.chainId;
-                                
-                                // Fetch preferred wallets for this user
-                                const response = await axios.get(`${API_URL}/preferred-wallets/user/${user.id}`);
-                                const preferredWallets = response.data || [];
-                                
-                                // Find wallet for the selected chain
-                                const chainWallet = preferredWallets.find((w: any) => {
-                                  const wChainId = String(w.chain_id).toLowerCase();
-                                  const targetChainIdStr = String(targetChainId).toLowerCase();
-                                  return wChainId === targetChainIdStr;
-                                });
-                                
-                                if (!chainWallet || !chainWallet.receiving_wallet_address) {
-                                  const chainName = getChainConfig(targetChainId as number)?.name || 'this chain';
-                                  toast.error(`User does not have a preferred wallet for ${chainName}. They need to set it up first.`);
-                                  setLoading(false);
-                                  return;
-                                }
-                                
-                                setSelectedRecipient({
-                                  id: user.id,
-                                  username: user.username || '',
-                                  displayName: displayName,
-                                  walletAddress: chainWallet.receiving_wallet_address
-                                });
-                                setFormData({ ...formData, to: user.username || '' });
-                                setShowSearchResults(false);
-                                setLoading(false);
-                              } catch (error: any) {
-                                console.error('Error fetching preferred wallet:', error);
-                                toast.error(error.response?.data?.error || 'Could not find wallet address for this user');
-                                setLoading(false);
-                                return;
-                              }
-                            }
-                          }}
+                            onClick={() => handleUserSelection(user)}
                           className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-200 last:border-b-0 flex items-center gap-3"
                         >
                           {/* Avatar - uses profile_image_url from database */}
@@ -1195,6 +1163,66 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
             </div>
           </div>
 
+          {/* Amount Input */}
+          <div className="relative pb-4 mb-4 w-full">
+            <div className="flex items-baseline gap-2 border-b border-gray-200 pb-3">
+              <input
+                type="number"
+                value={formData.amount}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === '' || (!isNaN(parseFloat(value)) && parseFloat(value) >= 0)) {
+                    setFormData({ ...formData, amount: value });
+                  }
+                }}
+                className="flex-1 min-w-0 px-0 py-2 border-0 bg-transparent placeholder-gray-400 text-2xl font-semibold focus:outline-none focus:border-gray-400 transition-colors text-black [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield]"
+                placeholder="0.00"
+                step="0.01"
+                min="0.01"
+                required
+                disabled={loading}
+              />
+              {/* Token Selector */}
+              <div className="relative flex-shrink-0">
+                <select
+                  value={formData.tokenSymbol}
+                  onChange={(e) => {
+                    const newToken = availableTokens.find(t => t.symbol === e.target.value);
+                    if (newToken) {
+                      setFormData({ ...formData, tokenSymbol: e.target.value });
+                    }
+                  }}
+                  className="appearance-none px-2.5 py-1.5 pr-6 rounded-full border border-gray-300 bg-transparent text-sm font-semibold focus:outline-none focus:border-black transition-colors cursor-pointer text-gray-700 whitespace-nowrap"
+                  disabled={loading}
+                  style={{ minWidth: 'fit-content' }}
+                >
+                  {availableTokens.map(token => (
+                    <option key={token.symbol} value={token.symbol}>
+                      {token.symbol}
+                    </option>
+                  ))}
+                </select>
+                <svg className="w-3 h-3 text-gray-400 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+                </svg>
+              </div>
+            </div>
+            {/* Chain Display - Below Token Selector, shown when user is selected */}
+            {selectedRecipient && selectedPreferredWallet && (
+              <div className="relative mt-3 flex justify-end">
+                <div className="px-3 py-1.5 rounded-full border border-gray-300 bg-transparent text-sm font-semibold text-gray-700">
+                  {(() => {
+                    const chainIdNum = typeof selectedPreferredWallet.chain_id === 'string' 
+                      ? parseInt(selectedPreferredWallet.chain_id) 
+                      : selectedPreferredWallet.chain_id;
+                    const chainConfig = getChainConfig(chainIdNum);
+                    return chainConfig?.name || `Chain ${selectedPreferredWallet.chain_id}`;
+                  })()}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* For Field - Caption */}
           <div className="relative mb-4 w-full">
             <label className="block text-sm font-medium text-gray-700 mb-2">For</label>
@@ -1209,31 +1237,6 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
               rows={1}
               style={{ height: '40px' }}
             />
-            {/* Character counter - Circular progress ring */}
-            {formData.caption && (
-              <div className="absolute bottom-2 right-4 flex items-center gap-2">
-                <span
-                  className="inline-block w-5 h-5 rounded-full relative flex-shrink-0"
-                  style={{
-                    background: `conic-gradient(${
-                      charCount > 290 ? 'rgb(239, 68, 68)' : 
-                      charCount > 270 ? 'rgb(249, 115, 22)' : 
-                      'rgb(16, 185, 129)'
-                    } ${Math.round((charCount / 300) * 360)}deg, rgb(229, 231, 235) 0deg)`
-                  }}
-                  aria-hidden
-                >
-                  <span className="absolute inset-[3px] rounded-full bg-white"></span>
-                </span>
-                <span className={`text-xs font-medium ${
-                  charCount > 290 ? 'text-red-500' : 
-                  charCount > 270 ? 'text-orange-500' : 
-                  'text-gray-500'
-                }`}>
-                  {300 - charCount}
-                </span>
-              </div>
-            )}
           </div>
 
 
@@ -1293,6 +1296,98 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
             </div>
           </div>
         </form>
+      )}
+
+      {/* Preferred Wallet Selection Modal */}
+      {showPreferredWalletModal && pendingUserSelection && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8 sm:py-12">
+          {/* Backdrop */}
+          <div 
+            className="absolute inset-0 bg-black/50"
+            onClick={() => {
+              setShowPreferredWalletModal(false);
+              setPendingUserSelection(null);
+            }}
+          />
+          
+          {/* Modal */}
+          <div className="relative bg-white max-w-md w-full rounded-lg shadow-xl overflow-hidden">
+            {/* Header */}
+            <div className="px-8 sm:px-10 pt-8 sm:pt-10 pb-6">
+              <div className="flex items-start justify-between mb-6">
+                <div className="flex-1">
+                  <h2 className="text-3xl font-bold text-black mb-2">
+                    Select Wallet for
+                  </h2>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-3xl font-bold text-black">
+                      {pendingUserSelection.displayName}
+                    </h3>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowPreferredWalletModal(false);
+                    setPendingUserSelection(null);
+                  }}
+                  className="p-2 hover:bg-gray-50 rounded-lg transition-colors flex-shrink-0 ml-4"
+                >
+                  <svg className="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="px-8 sm:px-10 pb-8 sm:pb-10 max-h-[60vh] overflow-y-auto">
+              <div className="space-y-3">
+                {preferredWallets.map((wallet: any) => {
+                  const chainIdNum = typeof wallet.chain_id === 'string' ? parseInt(wallet.chain_id) : wallet.chain_id;
+                  const chainConfig = getChainConfig(chainIdNum);
+                  const isSelected = selectedPreferredWallet?.id === wallet.id;
+                  
+                  // Truncate wallet address: show first 6 and last 4 characters
+                  const truncateAddress = (address: string) => {
+                    if (address.length <= 10) return address;
+                    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+                  };
+                  
+                  return (
+                    <button
+                      key={wallet.id}
+                      type="button"
+                      onClick={() => handlePreferredWalletSelect(wallet)}
+                      className={`w-full px-4 py-3 rounded-full transition-all ${
+                        isSelected
+                          ? 'bg-black text-white'
+                          : 'bg-gray-200 text-black hover:bg-gray-300'
+                      } font-semibold text-sm`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0 text-left">
+                          <div className="font-semibold text-sm mb-0.5">
+                            {chainConfig?.name || `Chain ${wallet.chain_id}`}
+                          </div>
+                          <div className={`text-xs font-mono ${
+                            isSelected ? 'text-gray-300' : 'text-gray-500'
+                          }`}>
+                            {truncateAddress(wallet.receiving_wallet_address)}
+                          </div>
+                        </div>
+                        {isSelected && (
+                          <svg className="w-5 h-5 flex-shrink-0 ml-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

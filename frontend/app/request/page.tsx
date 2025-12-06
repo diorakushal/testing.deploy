@@ -1,12 +1,14 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import CreateMarketSidebar from '@/components/CreateMarketSidebar';
 
 export default function RequestPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const toParam = searchParams.get('to');
 
   useEffect(() => {
     // Non-blocking auth check - redirect in background if needed
@@ -31,7 +33,11 @@ export default function RequestPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <div className="flex justify-center">
           <div className="w-full max-w-md">
-            <CreateMarketSidebar onSuccess={handleSuccess} defaultMode="request" />
+            <CreateMarketSidebar 
+              onSuccess={handleSuccess} 
+              defaultMode="request" 
+              initialTo={toParam || undefined}
+            />
           </div>
         </div>
       </main>

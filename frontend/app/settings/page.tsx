@@ -1041,6 +1041,30 @@ export default function SettingsPage() {
                             <div className="flex items-center gap-2 flex-shrink-0">
                               <button
                                 onClick={() => {
+                                  const username = contact.user?.username;
+                                  if (username) {
+                                    router.push(`/pay?to=${username}`);
+                                  }
+                                }}
+                                disabled={loading || !contact.user?.username}
+                                className="px-3 py-1.5 text-sm bg-gray-200 text-black rounded-full hover:bg-gray-300 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Pay
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const username = contact.user?.username;
+                                  if (username) {
+                                    router.push(`/request?to=${username}`);
+                                  }
+                                }}
+                                disabled={loading || !contact.user?.username}
+                                className="px-3 py-1.5 text-sm bg-gray-200 text-black rounded-full hover:bg-gray-300 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Request
+                              </button>
+                              <button
+                                onClick={() => {
                                   setEditingContactId(contact.id);
                                   setEditingNickname(contact.nickname || '');
                                 }}

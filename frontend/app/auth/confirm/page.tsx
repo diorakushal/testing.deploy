@@ -4,11 +4,26 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
+import { useAccount } from 'wagmi';
+import { useConnectModal } from '@rainbow-me/rainbowkit';
+import PreferredWalletsModal from '@/components/PreferredWalletsModal';
+import { updateUserWalletAddress } from '@/lib/auth-utils';
+import axios from 'axios';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 export default function ConfirmEmailPage() {
   const router = useRouter();
-  const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
+  const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'onboarding'>('loading');
   const [message, setMessage] = useState('Verifying your email...');
+  const [userId, setUserId] = useState<string | null>(null);
+  const [showWalletConnect, setShowWalletConnect] = useState(false);
+  const [showPreferredWallets, setShowPreferredWallets] = useState(false);
+  const [walletConnected, setWalletConnected] = useState(false);
+  const [preferredWalletsComplete, setPreferredWalletsComplete] = useState(false);
+  
+  const { address, isConnected } = useAccount();
+  const { openConnectModal } = useConnectModal();
 
   useEffect(() => {
     const verifyEmail = async () => {
@@ -31,9 +46,9 @@ export default function ConfirmEmailPage() {
               .eq('id', session.user.id);
           }
 
-          setStatus('success');
-          setMessage('Email verified successfully!');
-          setTimeout(() => router.push('/feed'), 2000);
+          setUserId(session.user.id);
+          setStatus('onboarding');
+          setShowWalletConnect(true);
           return;
         }
 
@@ -59,9 +74,9 @@ export default function ConfirmEmailPage() {
             if (error) throw error;
             if (data.user) {
               await supabase.from('users').update({ email_verified: true }).eq('id', data.user.id);
-              setStatus('success');
-              setMessage('Email verified successfully!');
-              setTimeout(() => router.push('/feed'), 2000);
+              setUserId(data.user.id);
+              setStatus('onboarding');
+              setShowWalletConnect(true);
               return;
             }
           }
@@ -95,13 +110,9 @@ export default function ConfirmEmailPage() {
               console.error('Error updating user profile:', updateError);
             }
 
-            setStatus('success');
-            setMessage('Email verified successfully!');
-
-            // Redirect to feed page after 2 seconds
-            setTimeout(() => {
-              router.push('/feed');
-            }, 2000);
+            setUserId(data.user.id);
+            setStatus('onboarding');
+            setShowWalletConnect(true);
           } else {
             throw new Error('User not found after verification');
           }
@@ -117,6 +128,61 @@ export default function ConfirmEmailPage() {
 
     verifyEmail();
   }, [router]);
+
+  // Handle wallet connection during onboarding
+  useEffect(() => {
+    if (status === 'onboarding' && showWalletConnect && !walletConnected && isConnected && address && userId) {
+      // Wallet just connected - update user's wallet address in database
+      const handleWalletConnected = async () => {
+        try {
+          await updateUserWalletAddress(userId, address);
+          setWalletConnected(true);
+          setShowWalletConnect(false);
+          // Show preferred wallets modal after a brief delay
+          setTimeout(() => {
+            setShowPreferredWallets(true);
+          }, 500);
+        } catch (error) {
+          console.error('Error updating wallet address:', error);
+        }
+      };
+      handleWalletConnected();
+    }
+  }, [status, showWalletConnect, walletConnected, isConnected, address, userId]);
+
+  // Open wallet connect modal when onboarding starts
+  useEffect(() => {
+    if (status === 'onboarding' && showWalletConnect && !isConnected && openConnectModal) {
+      // Small delay to ensure modal can open
+      setTimeout(() => {
+        openConnectModal();
+      }, 300);
+    }
+  }, [status, showWalletConnect, isConnected, openConnectModal]);
+
+  // User can add as many preferred wallets as they want
+  // Redirect only happens when they click "Done" button in the modal
+
+  const handlePreferredWalletsClose = async () => {
+    // Check if at least one wallet is set up before allowing close
+    if (!userId) return;
+    
+    try {
+      const response = await axios.get(`${API_URL}/preferred-wallets?userId=${userId}`);
+      const wallets = response.data || [];
+      
+      // User can proceed once they have at least one wallet
+      if (wallets.length > 0) {
+        setPreferredWalletsComplete(true);
+        setShowPreferredWallets(false);
+        // Redirect to feed
+        router.replace('/feed');
+      }
+      // If no wallets, don't close (handled by mandatory prop in modal)
+    } catch (error) {
+      console.error('Error checking preferred wallets on close:', error);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-white">
@@ -151,6 +217,26 @@ export default function ConfirmEmailPage() {
               </div>
             )}
 
+            {status === 'onboarding' && (
+              <div>
+                <h1 className="text-3xl font-bold text-black mb-2">Email verified!</h1>
+                <p className="text-gray-600 text-sm mt-2">Please connect your wallet to continue</p>
+                {!walletConnected && (
+                  <div className="mt-6">
+                    <button
+                      onClick={() => openConnectModal?.()}
+                      className="w-full px-4 py-3 bg-black text-white rounded-full hover:bg-gray-900 active:scale-[0.98] transition-all duration-200 font-medium"
+                    >
+                      Connect Wallet
+                    </button>
+                  </div>
+                )}
+                {walletConnected && !preferredWalletsComplete && (
+                  <p className="text-gray-600 text-sm mt-3">Setting up your preferred wallets...</p>
+                )}
+              </div>
+            )}
+
             {status === 'error' && (
               <div>
                 <h1 className="text-3xl font-bold text-black mb-2">Verification failed</h1>
@@ -166,6 +252,16 @@ export default function ConfirmEmailPage() {
           </div>
         </div>
       </main>
+
+      {/* Preferred Wallets Modal - shown after wallet connects */}
+      {userId && (
+        <PreferredWalletsModal
+          isOpen={showPreferredWallets}
+          onClose={handlePreferredWalletsClose}
+          userId={userId}
+          mandatory={true}
+        />
+      )}
     </div>
   );
 }
