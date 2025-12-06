@@ -205,10 +205,10 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
-// Search users by username (for autocomplete)
+// Search users by username or nickname (for autocomplete)
 app.get('/api/users/search', async (req, res) => {
   try {
-    const { q } = req.query; // Search query (username only)
+    const { q, userId } = req.query; // Search query (username or nickname) and optional userId for contact boosting
     
     if (!q || q.length < 1) {
       return res.json([]);
@@ -221,68 +221,112 @@ app.get('/api/users/search', async (req, res) => {
       return res.json([]);
     }
     
-    console.log('Searching for users by username:', cleanSearch);
+    console.log('Searching for users by username or nickname:', cleanSearch, userId ? `(userId: ${userId})` : '');
     
     // Use Supabase client for this query (more reliable for Supabase)
     const { supabase } = require('./lib/supabase');
     
     console.log('Searching with pattern:', `%${cleanSearch}%`);
     
-    // Use Supabase client with ilike for case-insensitive search
-    const { data, error } = await supabase
+    // Step 1: Search users by username
+    const { data: usernameResults, error: usernameError } = await supabase
       .from('users')
       .select('id, username, email, first_name, last_name, profile_image_url')
       .not('username', 'is', null)
       .neq('username', '')
       .ilike('username', `%${cleanSearch}%`)
-      .limit(10);
+      .limit(20);
     
-    console.log('Search results count:', data?.length || 0);
-    if (error) {
-      console.error('Supabase search error:', error);
-      // Fallback to direct query if Supabase fails
+    if (usernameError) {
+      console.error('Supabase username search error:', usernameError);
+    }
+    
+    // Step 2: If userId is provided, also search contacts by nickname
+    let nicknameUserIds = [];
+    if (userId) {
       try {
-        const result = await pool.query(
-          `SELECT id, username, email, first_name, last_name, profile_image_url 
-           FROM users 
-           WHERE username IS NOT NULL 
-             AND username != ''
-             AND LOWER(username) LIKE $1
-           ORDER BY username ASC 
-           LIMIT 10`,
-          [`%${cleanSearch}%`]
-        );
-        console.log('Fallback query results:', result.rows.length);
-        const results = (result.rows || []).map(user => ({
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          first_name: user.first_name,
-          last_name: user.last_name,
-          profile_image_url: user.profile_image_url,
-          displayName: user.first_name && user.last_name 
-            ? `${user.first_name} ${user.last_name}` 
-            : user.first_name || user.email?.split('@')[0] || 'User',
-          searchText: user.username ? `@${user.username}` : user.email
-        }));
-        return res.json(results);
-      } catch (fallbackError) {
-        console.error('Fallback query also failed:', fallbackError);
-        return res.json([]);
+        console.log('[NICKNAME SEARCH] Searching contacts by nickname for userId:', userId, 'search term:', cleanSearch);
+        const { data: nicknameContacts, error: nicknameError } = await supabase
+          .from('contacts')
+          .select('contact_user_id, nickname')
+          .eq('user_id', userId)
+          .not('nickname', 'is', null)
+          .neq('nickname', '')
+          .ilike('nickname', `%${cleanSearch}%`);
+        
+        if (nicknameError) {
+          console.error('[NICKNAME SEARCH] Error searching contacts by nickname:', nicknameError);
+        } else {
+          console.log('[NICKNAME SEARCH] Query result:', nicknameContacts);
+          if (nicknameContacts && nicknameContacts.length > 0) {
+            nicknameUserIds = nicknameContacts.map(c => c.contact_user_id);
+            console.log('[NICKNAME SEARCH] Found contacts by nickname:', nicknameContacts.length, 'user IDs:', nicknameUserIds);
+            console.log('[NICKNAME SEARCH] Nickname matches:', nicknameContacts.map(c => ({ userId: c.contact_user_id, nickname: c.nickname })));
+          } else {
+            console.log('[NICKNAME SEARCH] No nickname contacts found matching:', cleanSearch);
+          }
+        }
+      } catch (nicknameErr) {
+        console.error('[NICKNAME SEARCH] Exception searching contacts by nickname:', nicknameErr);
+      }
+    } else {
+      console.log('[NICKNAME SEARCH] No userId provided, skipping nickname search');
+    }
+    
+    // Step 3: Fetch user data for contacts found by nickname
+    let nicknameUserResults = [];
+    if (nicknameUserIds.length > 0) {
+      try {
+        const { data: nicknameUsers, error: nicknameUsersError } = await supabase
+          .from('users')
+          .select('id, username, email, first_name, last_name, profile_image_url')
+          .in('id', nicknameUserIds);
+        
+        if (!nicknameUsersError && nicknameUsers) {
+          nicknameUserResults = nicknameUsers;
+        }
+      } catch (nicknameUsersErr) {
+        console.error('Error fetching users for nickname matches:', nicknameUsersErr);
       }
     }
     
-    if (data && data.length > 0) {
-      console.log('Found users:', data.map(u => u.username));
-    } else {
-      console.log('No users found matching:', cleanSearch);
+    // Step 4: Combine and deduplicate results by user ID
+    const allUserResults = [...(usernameResults || []), ...nicknameUserResults];
+    const uniqueUsersMap = new Map();
+    allUserResults.forEach(user => {
+      if (!uniqueUsersMap.has(user.id)) {
+        uniqueUsersMap.set(user.id, user);
+      }
+    });
+    const resultRows = Array.from(uniqueUsersMap.values());
+    
+    console.log('Combined search results count:', resultRows.length);
+    
+    // Step 5: If userId is provided, fetch all contacts to mark them and get nicknames
+    let contactsMap = {};
+    if (userId) {
+      try {
+        const { data: contacts, error: contactsError } = await supabase
+          .from('contacts')
+          .select('contact_user_id, nickname')
+          .eq('user_id', userId);
+        
+        if (!contactsError && contacts) {
+          contacts.forEach(contact => {
+            contactsMap[contact.contact_user_id] = {
+              isContact: true,
+              nickname: contact.nickname
+            };
+          });
+        }
+      } catch (contactsErr) {
+        console.error('Error fetching contacts for search boost:', contactsErr);
+        // Continue without contact boosting if this fails
+      }
     }
     
-    // Use data from Supabase query
-    const resultRows = data || [];
-    
-    // Format results for autocomplete
-    const results = (resultRows || []).map(user => ({
+    // Step 6: Format results for autocomplete and mark contacts
+    let results = resultRows.map(user => ({
       id: user.id,
       username: user.username,
       email: user.email,
@@ -292,8 +336,30 @@ app.get('/api/users/search', async (req, res) => {
       displayName: user.first_name && user.last_name 
         ? `${user.first_name} ${user.last_name}` 
         : user.first_name || user.email?.split('@')[0] || 'User',
-      searchText: user.username ? `@${user.username}` : user.email
+      searchText: user.username ? `@${user.username}` : user.email,
+      isContact: contactsMap[user.id]?.isContact || false,
+      nickname: contactsMap[user.id]?.nickname || null
     }));
+    
+    // Step 7: Sort: contacts first (especially those matched by nickname), then others (alphabetically by username)
+    results.sort((a, b) => {
+      // Prioritize contacts matched by nickname (they have a nickname that matches the search)
+      const aNicknameMatch = a.isContact && a.nickname && a.nickname.toLowerCase().includes(cleanSearch);
+      const bNicknameMatch = b.isContact && b.nickname && b.nickname.toLowerCase().includes(cleanSearch);
+      
+      if (aNicknameMatch && !bNicknameMatch) return -1;
+      if (!aNicknameMatch && bNicknameMatch) return 1;
+      
+      // Then prioritize all contacts
+      if (a.isContact && !b.isContact) return -1;
+      if (!a.isContact && b.isContact) return 1;
+      
+      // Both are contacts or both are not - sort alphabetically by username
+      return (a.username || '').localeCompare(b.username || '');
+    });
+    
+    // Limit to 10 results after sorting
+    results = results.slice(0, 10);
     
     res.json(results);
   } catch (error) {
@@ -978,12 +1044,43 @@ app.get('/api/payment-requests', async (req, res) => {
         }
       }
       
+      // Fetch usernames for recipients (recipient_user_id field)
+      const uniqueRecipientIds = [...new Set(data.map(r => r.recipient_user_id).filter(Boolean))];
+      if (uniqueRecipientIds.length > 0) {
+        const { data: recipients, error: recipientsError } = await supabase
+          .from('users')
+          .select('id, username, first_name, last_name')
+          .in('id', uniqueRecipientIds);
+        
+        if (!recipientsError && recipients) {
+          // Create a map of user_id -> user data for recipients
+          const recipientUserMap = {};
+          recipients.forEach(user => {
+            recipientUserMap[user.id] = {
+              username: user.username,
+              first_name: user.first_name,
+              last_name: user.last_name
+            };
+          });
+          
+          // Add recipient user data to each payment request
+          data.forEach(request => {
+            if (request.recipient_user_id && recipientUserMap[request.recipient_user_id]) {
+              const user = recipientUserMap[request.recipient_user_id];
+              request.recipient_username = user.username;
+              request.recipient_first_name = user.first_name;
+              request.recipient_last_name = user.last_name;
+            }
+          });
+        }
+      }
+      
       // Fetch usernames for payers (paid_by field)
       const paidByAddresses = [...new Set(data.map(r => r.paid_by).filter(Boolean))];
       if (paidByAddresses.length > 0) {
         const { data: payers, error: payersError } = await supabase
           .from('users')
-          .select('wallet_address, username, first_name, last_name')
+          .select('id, wallet_address, username, first_name, last_name')
           .in('wallet_address', paidByAddresses);
         
         if (!payersError && payers) {
@@ -991,6 +1088,7 @@ app.get('/api/payment-requests', async (req, res) => {
           const payerUserMap = {};
           payers.forEach(user => {
             payerUserMap[user.wallet_address?.toLowerCase()] = {
+              id: user.id,
               username: user.username,
               first_name: user.first_name,
               last_name: user.last_name
@@ -1001,6 +1099,7 @@ app.get('/api/payment-requests', async (req, res) => {
           data.forEach(request => {
             if (request.paid_by && payerUserMap[request.paid_by?.toLowerCase()]) {
               const user = payerUserMap[request.paid_by?.toLowerCase()];
+              request.paid_by_user_id = user.id;
               request.paid_by_username = user.username;
               request.paid_by_first_name = user.first_name;
               request.paid_by_last_name = user.last_name;
@@ -1086,15 +1185,31 @@ app.get('/api/payment-requests/:id', async (req, res) => {
         }
       }
       
+      // Fetch user data for recipient if specified
+      if (data.recipient_user_id) {
+        const { data: recipient, error: recipientError } = await supabase
+          .from('users')
+          .select('username, first_name, last_name')
+          .eq('id', data.recipient_user_id)
+          .maybeSingle();
+        
+        if (!recipientError && recipient) {
+          data.recipient_username = recipient.username;
+          data.recipient_first_name = recipient.first_name;
+          data.recipient_last_name = recipient.last_name;
+        }
+      }
+      
       // Fetch user data for payer if paid
       if (data.paid_by) {
         const { data: payer, error: payerError } = await supabase
           .from('users')
-          .select('username, first_name, last_name')
+          .select('id, username, first_name, last_name')
           .eq('wallet_address', data.paid_by)
           .maybeSingle();
         
         if (!payerError && payer) {
+          data.paid_by_user_id = payer.id;
           data.paid_by_username = payer.username;
           data.paid_by_first_name = payer.first_name;
           data.paid_by_last_name = payer.last_name;
@@ -1667,6 +1782,346 @@ app.get('/api/preferred-wallets/user/:userId', async (req, res) => {
     res.json(data || []);
   } catch (error) {
     console.error('Error fetching user preferred wallets:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ========== CONTACTS ENDPOINTS ==========
+
+// Get all contacts for a user
+app.get('/api/contacts', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'Missing userId' });
+    }
+
+    const { supabase } = require('./lib/supabase');
+
+    // Get contacts with user information
+    // Use a simpler approach: get contacts first, then fetch user data
+    const { data: contacts, error: contactsError } = await supabase
+      .from('contacts')
+      .select('id, contact_user_id, nickname, created_at, updated_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (contactsError) {
+      // If table doesn't exist, return empty array
+      if (contactsError.code === '42P01' || contactsError.message?.includes('does not exist')) {
+        console.log('Contacts table does not exist yet. Run the migration first.');
+        return res.json([]);
+      }
+      throw contactsError;
+    }
+
+    // Fetch user data for all contacts
+    if (contacts && contacts.length > 0) {
+      const contactUserIds = contacts.map(c => c.contact_user_id);
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, username, first_name, last_name, email, profile_image_url')
+        .in('id', contactUserIds);
+
+      if (usersError) {
+        console.error('Error fetching contact users:', usersError);
+        // Continue with empty user data rather than failing
+      }
+
+      // Create a map of user_id -> user data
+      const userMap = {};
+      if (users) {
+        users.forEach(user => {
+          userMap[user.id] = user;
+        });
+      }
+
+      // Format the response
+      const formattedContacts = contacts.map(contact => ({
+        id: contact.id,
+        contact_user_id: contact.contact_user_id,
+        nickname: contact.nickname,
+        created_at: contact.created_at,
+        updated_at: contact.updated_at,
+        user: userMap[contact.contact_user_id] ? {
+          id: userMap[contact.contact_user_id].id,
+          username: userMap[contact.contact_user_id].username,
+          first_name: userMap[contact.contact_user_id].first_name,
+          last_name: userMap[contact.contact_user_id].last_name,
+          email: userMap[contact.contact_user_id].email,
+          profile_image_url: userMap[contact.contact_user_id].profile_image_url,
+          displayName: userMap[contact.contact_user_id].first_name && userMap[contact.contact_user_id].last_name
+            ? `${userMap[contact.contact_user_id].first_name} ${userMap[contact.contact_user_id].last_name}`
+            : userMap[contact.contact_user_id].first_name || userMap[contact.contact_user_id].email?.split('@')[0] || 'User'
+        } : null
+      }));
+
+      return res.json(formattedContacts);
+    }
+
+    // No contacts found
+    return res.json([]);
+  } catch (error) {
+    console.error('Error fetching contacts:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    });
+    
+    // Provide more helpful error messages
+    let errorMessage = error.message || 'Failed to load contacts';
+    if (error.code === '42P01' || error.message?.includes('does not exist')) {
+      errorMessage = 'Contacts table does not exist. Please run the database migration first.';
+    } else if (error.code === '23503') {
+      errorMessage = 'Invalid user reference. Please ensure the user exists.';
+    }
+    
+    res.status(500).json({ 
+      error: errorMessage,
+      code: error.code,
+      details: error.details
+    });
+  }
+});
+
+// Add a contact
+app.post('/api/contacts', async (req, res) => {
+  try {
+    const { userId, contactUserId, nickname } = req.body;
+    
+    if (!userId || !contactUserId) {
+      return res.status(400).json({ error: 'Missing userId or contactUserId' });
+    }
+
+    if (userId === contactUserId) {
+      return res.status(400).json({ error: 'Cannot add yourself as a contact' });
+    }
+
+    const { supabase } = require('./lib/supabase');
+
+    // Check if contact already exists
+    const { data: existing, error: checkError } = await supabase
+      .from('contacts')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('contact_user_id', contactUserId)
+      .single();
+
+    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = not found
+      throw checkError;
+    }
+
+    let contactData;
+    if (existing) {
+      // Update existing contact (e.g., update nickname)
+      const { data, error } = await supabase
+        .from('contacts')
+        .update({
+          nickname: nickname || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existing.id)
+        .select('id, contact_user_id, nickname, created_at, updated_at')
+        .single();
+
+      if (error) throw error;
+      contactData = data;
+    } else {
+      // Create new contact
+      const { data, error } = await supabase
+        .from('contacts')
+        .insert({
+          user_id: userId,
+          contact_user_id: contactUserId,
+          nickname: nickname || null
+        })
+        .select('id, contact_user_id, nickname, created_at, updated_at')
+        .single();
+
+      if (error) throw error;
+      contactData = data;
+    }
+
+    // Fetch user data for the contact
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id, username, first_name, last_name, email, profile_image_url')
+      .eq('id', contactData.contact_user_id)
+      .single();
+
+    if (userError) {
+      console.error('Error fetching contact user:', userError);
+      // Return contact without user data rather than failing
+    }
+
+    const formatted = {
+      id: contactData.id,
+      contact_user_id: contactData.contact_user_id,
+      nickname: contactData.nickname,
+      created_at: contactData.created_at,
+      updated_at: contactData.updated_at,
+      user: userData ? {
+        id: userData.id,
+        username: userData.username,
+        first_name: userData.first_name,
+        last_name: userData.last_name,
+        email: userData.email,
+        profile_image_url: userData.profile_image_url,
+        displayName: userData.first_name && userData.last_name
+          ? `${userData.first_name} ${userData.last_name}`
+          : userData.first_name || userData.email?.split('@')[0] || 'User'
+      } : null
+    };
+
+    res.json(formatted);
+  } catch (error) {
+    console.error('Error adding contact:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    });
+    
+    // Provide more helpful error messages
+    let errorMessage = error.message || 'Failed to add contact';
+    if (error.code === '23505') {
+      errorMessage = 'This contact already exists.';
+    } else if (error.code === '23503') {
+      errorMessage = 'Invalid user reference. The user you are trying to add does not exist.';
+    } else if (error.code === '23514') {
+      errorMessage = 'Cannot add yourself as a contact.';
+    } else if (error.code === '42P01' || error.message?.includes('does not exist')) {
+      errorMessage = 'Contacts table does not exist. Please run the database migration first.';
+    }
+    
+    res.status(500).json({ 
+      error: errorMessage,
+      code: error.code,
+      details: error.details
+    });
+  }
+});
+
+// Update contact (mainly for nickname)
+app.patch('/api/contacts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId, nickname } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'Missing userId' });
+    }
+
+    const { supabase } = require('./lib/supabase');
+
+    // Verify the contact belongs to the user
+    const { data: existing, error: checkError } = await supabase
+      .from('contacts')
+      .select('id, user_id')
+      .eq('id', id)
+      .single();
+
+    if (checkError || !existing) {
+      return res.status(404).json({ error: 'Contact not found' });
+    }
+
+    if (existing.user_id !== userId) {
+      return res.status(403).json({ error: 'Not authorized to update this contact' });
+    }
+
+    // Update the contact
+    const { data: contactData, error } = await supabase
+      .from('contacts')
+      .update({
+        nickname: nickname || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select('id, contact_user_id, nickname, created_at, updated_at')
+      .single();
+
+    if (error) throw error;
+
+    // Fetch user data for the contact
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('id, username, first_name, last_name, email, profile_image_url')
+      .eq('id', contactData.contact_user_id)
+      .single();
+
+    if (userError) {
+      console.error('Error fetching contact user:', userError);
+      // Return contact without user data rather than failing
+    }
+
+    const formatted = {
+      id: contactData.id,
+      contact_user_id: contactData.contact_user_id,
+      nickname: contactData.nickname,
+      created_at: contactData.created_at,
+      updated_at: contactData.updated_at,
+      user: userData ? {
+        id: userData.id,
+        username: userData.username,
+        first_name: userData.first_name,
+        last_name: userData.last_name,
+        email: userData.email,
+        profile_image_url: userData.profile_image_url,
+        displayName: userData.first_name && userData.last_name
+          ? `${userData.first_name} ${userData.last_name}`
+          : userData.first_name || userData.email?.split('@')[0] || 'User'
+      } : null
+    };
+
+    res.json(formatted);
+  } catch (error) {
+    console.error('Error updating contact:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete a contact
+app.delete('/api/contacts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.query;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'Missing userId' });
+    }
+
+    const { supabase } = require('./lib/supabase');
+
+    // Verify the contact belongs to the user
+    const { data: existing, error: checkError } = await supabase
+      .from('contacts')
+      .select('id, user_id')
+      .eq('id', id)
+      .single();
+
+    if (checkError || !existing) {
+      return res.status(404).json({ error: 'Contact not found' });
+    }
+
+    if (existing.user_id !== userId) {
+      return res.status(403).json({ error: 'Not authorized to delete this contact' });
+    }
+
+    // Delete the contact
+    const { error } = await supabase
+      .from('contacts')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+
+    res.json({ message: 'Contact deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting contact:', error);
     res.status(500).json({ error: error.message });
   }
 });

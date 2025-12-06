@@ -33,7 +33,7 @@ export default function UserAvatar({
   const gradient = getUserGradient(userId);
   const initials = getUserInitials(firstName, lastName, username, email);
   const sizeClass = sizeClasses[size];
-  
+
   // Get profile icon based on profileImageUrl (0-7) or fallback to gradient with initials
   // Handle both string and number types, and empty strings
   const profileIcon = profileImageUrl !== null && profileImageUrl !== undefined && profileImageUrl !== ''

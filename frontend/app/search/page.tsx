@@ -59,7 +59,7 @@ export default function SearchPage() {
       setHasSearched(true);
       
       const response = await axios.get(`${API_URL}/users/search`, {
-        params: { q: cleanQuery },
+        params: { q: cleanQuery, userId: userId },
         timeout: 5000
       });
       

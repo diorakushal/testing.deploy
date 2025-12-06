@@ -156,7 +156,7 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
       setSearchingUsers(true);
       console.log('Calling search API with query:', cleanQuery);
       const response = await axios.get(`${API_URL}/users/search`, {
-        params: { q: cleanQuery },
+        params: { q: cleanQuery, userId: userId },
         timeout: 5000
       });
       
@@ -968,10 +968,11 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
                     setTimeout(() => setShowSearchResults(false), 300);
                   }
                 }}
-                className="w-full pl-8 pr-4 py-2 rounded-full border border-gray-300 bg-white placeholder-gray-400 text-base focus:outline-none focus:border-black transition-colors text-black"
+                className="w-full pl-8 pr-4 py-2 rounded-full border border-gray-300 bg-white placeholder-gray-400 text-base focus:outline-none focus:border-black transition-all text-black"
                 placeholder="username"
                 disabled={loading}
                 required={mode === 'request'}
+                style={{ height: '40px' }}
               />
               {searchingUsers && (
                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -1020,7 +1021,7 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
                 return shouldShow;
               })() && (
                 <div 
-                  className="search-results-dropdown absolute z-[9999] w-full mt-1 bg-white border-2 border-blue-500 rounded-lg shadow-2xl max-h-60 overflow-auto" 
+                  className="search-results-dropdown absolute z-[9999] w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto" 
                   style={{ 
                     top: 'calc(100% + 4px)',
                     left: 0,
@@ -1042,21 +1043,35 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
                       </div>
                     </div>
                   ) : searchResults.length > 0 ? (
-                    searchResults.map((user: any) => {
+                    searchResults.map((user: any, index: number) => {
                       // Get display name: first_name + last_name, or fallback
                       const displayName = (user.first_name && user.last_name)
                         ? `${user.first_name} ${user.last_name}`
                         : user.first_name || user.displayName || user.email?.split('@')[0] || 'User';
+                      const isContact = user.isContact || false;
+                      const isFirstNonContact = !isContact && index > 0 && searchResults[index - 1]?.isContact;
+                      
+                      // Check if nickname matches the search (for highlighting)
+                      const searchTerm = formData.to.replace(/^@+/, '').trim().toLowerCase();
+                      const nicknameMatches = user.nickname && user.nickname.toLowerCase().includes(searchTerm);
+                      // Show nickname first if it matches the search, otherwise show displayName
+                      const primaryName = nicknameMatches ? user.nickname : displayName;
+                      const secondaryName = nicknameMatches ? displayName : (user.nickname || null);
                       
                       return (
-                        <button
-                          key={user.id}
-                          type="button"
-                          onMouseDown={(e) => {
-                            // Prevent blur from firing before click
-                            e.preventDefault();
-                          }}
-                          onClick={async () => {
+                        <div key={user.id}>
+                          {isFirstNonContact && (
+                            <div className="px-4 py-2 text-xs font-medium text-gray-500 bg-gray-50 border-t border-b border-gray-200">
+                              Others
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              // Prevent blur from firing before click
+                              e.preventDefault();
+                            }}
+                            onClick={async () => {
                             // For REQUEST mode: We don't need wallet address, just set the recipient
                             // For PAY mode: We need to fetch preferred wallet address for the selected chain
                             if (mode === 'request') {
@@ -1115,7 +1130,7 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
                               }
                             }
                           }}
-                          className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-b-0 flex items-center gap-3"
+                          className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors border-b border-gray-200 last:border-b-0 flex items-center gap-3"
                         >
                           {/* Avatar - uses profile_image_url from database */}
                           <UserAvatar
@@ -1130,8 +1145,30 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
                           
                           {/* Text content - display name on top, username below */}
                           <div className="flex-1 min-w-0">
-                            <div className="font-semibold text-gray-800 text-base leading-tight">
-                              {displayName}
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-black text-sm leading-tight">
+                                {(() => {
+                                  // Check if nickname matches the search (for highlighting)
+                                  const searchTerm = formData.to.replace(/^@+/, '').trim().toLowerCase();
+                                  const nicknameMatches = user.nickname && user.nickname.toLowerCase().includes(searchTerm);
+                                  // Show nickname first if it matches the search, otherwise show displayName
+                                  const primaryName = nicknameMatches ? user.nickname : displayName;
+                                  const secondaryName = nicknameMatches ? displayName : (user.nickname || null);
+                                  return (
+                                    <>
+                                      {primaryName}
+                                      {secondaryName && (
+                                        <span className="ml-2 text-gray-400">({secondaryName})</span>
+                                      )}
+                                    </>
+                                  );
+                                })()}
+                              </span>
+                              {isContact && (
+                                <span className="text-xs px-2 py-0.5 bg-gray-200 text-black rounded-full font-medium">
+                                  Contact
+                                </span>
+                              )}
                             </div>
                             <div className="text-sm text-gray-500 mt-0.5 leading-tight">
                               @{user.username}
@@ -1145,6 +1182,7 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
                             </svg>
                           </div>
                         </button>
+                        </div>
                       );
                     })
                   ) : formData.to.replace(/^@+/, '').trim().length >= 1 ? (

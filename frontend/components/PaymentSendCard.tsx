@@ -29,9 +29,20 @@ interface PaymentSendCardProps {
   };
   userAddress?: string;
   userId?: string | null;
+  contacts?: Array<{
+    id: string;
+    contact_user_id: string;
+    nickname?: string | null;
+    user?: {
+      id: string;
+      username?: string | null;
+      first_name?: string | null;
+      last_name?: string | null;
+    } | null;
+  }>;
 }
 
-export default function PaymentSendCard({ send, userAddress, userId }: PaymentSendCardProps) {
+export default function PaymentSendCard({ send, userAddress, userId, contacts = [] }: PaymentSendCardProps) {
   const formatAmount = (amount: string | number) => {
     const num = typeof amount === 'string' ? parseFloat(amount) : amount;
     if (num < 0.0001) {
@@ -48,7 +59,21 @@ export default function PaymentSendCard({ send, userAddress, userId }: PaymentSe
     return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
   };
 
-  const formatName = (username?: string | null, firstName?: string | null, lastName?: string | null, fallback?: string | null) => {
+  // Create a map of contact_user_id -> nickname for quick lookup
+  const contactsMap = new Map<string, string>();
+  contacts.forEach(contact => {
+    if (contact.contact_user_id && contact.nickname) {
+      contactsMap.set(contact.contact_user_id, contact.nickname);
+    }
+  });
+
+  const formatName = (userId?: string | null, username?: string | null, firstName?: string | null, lastName?: string | null, fallback?: string | null) => {
+    // Check if this user is a contact with a nickname
+    if (userId && contactsMap.has(userId)) {
+      return contactsMap.get(userId)!;
+    }
+    
+    // Fallback to username or name
     if (username) {
       return `@${username}`;
     }
@@ -113,15 +138,15 @@ export default function PaymentSendCard({ send, userAddress, userId }: PaymentSe
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               {isSentByMe ? (
                 <span className="text-sm text-gray-900">
-                  You paid {formatName(send.recipient_username, send.recipient_first_name, send.recipient_last_name) || formatAddress(send.recipient_address)} <span className="text-xs text-gray-500">on {send.chain_name}</span>
+                  You paid {formatName(send.recipient_user_id, send.recipient_username, send.recipient_first_name, send.recipient_last_name) || formatAddress(send.recipient_address)} <span className="text-xs text-gray-500">on {send.chain_name}</span>
                 </span>
               ) : isReceivedByMe ? (
                 <span className="text-sm text-gray-900">
-                  {formatName(send.sender_username, send.sender_first_name, send.sender_last_name) || formatAddress(send.sender_address)} paid you <span className="text-xs text-gray-500">on {send.chain_name}</span>
+                  {formatName(send.sender_user_id, send.sender_username, send.sender_first_name, send.sender_last_name) || formatAddress(send.sender_address)} paid you <span className="text-xs text-gray-500">on {send.chain_name}</span>
                 </span>
               ) : (
                 <span className="text-sm text-gray-900">
-                  {formatName(send.sender_username, send.sender_first_name, send.sender_last_name) || formatAddress(send.sender_address)} paid {formatName(send.recipient_username, send.recipient_first_name, send.recipient_last_name) || formatAddress(send.recipient_address)} <span className="text-xs text-gray-500">on {send.chain_name}</span>
+                  {formatName(send.sender_user_id, send.sender_username, send.sender_first_name, send.sender_last_name) || formatAddress(send.sender_address)} paid {formatName(send.recipient_user_id, send.recipient_username, send.recipient_first_name, send.recipient_last_name) || formatAddress(send.recipient_address)} <span className="text-xs text-gray-500">on {send.chain_name}</span>
                 </span>
               )}
             </div>

@@ -38,10 +38,14 @@ interface PaymentRequestCardProps {
   request: {
     id: string;
     requester_address: string;
+    requester_user_id?: string | null;
     requester_username?: string | null; // Username from authenticated user account
     requester_first_name?: string | null;
     requester_last_name?: string | null;
     recipient_user_id?: string | null;
+    recipient_username?: string | null;
+    recipient_first_name?: string | null;
+    recipient_last_name?: string | null;
     amount: string | number;
     token_symbol: string;
     token_address: string;
@@ -50,6 +54,7 @@ interface PaymentRequestCardProps {
     caption: string | null;
     status: string;
     paid_by?: string | null;
+    paid_by_user_id?: string | null;
     paid_by_username?: string | null; // Username of the payer
     paid_by_first_name?: string | null;
     paid_by_last_name?: string | null;
@@ -59,10 +64,21 @@ interface PaymentRequestCardProps {
   };
   userAddress?: string;
   userId?: string | null;
+  contacts?: Array<{
+    id: string;
+    contact_user_id: string;
+    nickname?: string | null;
+    user?: {
+      id: string;
+      username?: string | null;
+      first_name?: string | null;
+      last_name?: string | null;
+    } | null;
+  }>;
   onPaymentSuccess?: () => void;
 }
 
-export default function PaymentRequestCard({ request, userAddress, userId, onPaymentSuccess }: PaymentRequestCardProps) {
+export default function PaymentRequestCard({ request, userAddress, userId, contacts = [], onPaymentSuccess }: PaymentRequestCardProps) {
   console.log('[PaymentRequestCard] 🎨 Component render', {
     requestId: request.id,
     requestStatus: request.status,
@@ -154,7 +170,21 @@ export default function PaymentRequestCard({ request, userAddress, userId, onPay
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
-  const formatName = (username?: string | null, firstName?: string | null, lastName?: string | null, fallback?: string | null) => {
+  // Create a map of contact_user_id -> nickname for quick lookup
+  const contactsMap = new Map<string, string>();
+  contacts.forEach(contact => {
+    if (contact.contact_user_id && contact.nickname) {
+      contactsMap.set(contact.contact_user_id, contact.nickname);
+    }
+  });
+
+  const formatName = (userId?: string | null, username?: string | null, firstName?: string | null, lastName?: string | null, fallback?: string | null) => {
+    // Check if this user is a contact with a nickname
+    if (userId && contactsMap.has(userId)) {
+      return contactsMap.get(userId)!;
+    }
+    
+    // Fallback to username or name
     if (username) {
       return `@${username}`;
     }
@@ -588,12 +618,12 @@ export default function PaymentRequestCard({ request, userAddress, userId, onPay
       {/* Cancel Confirmation Modal */}
       {showCancelModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold text-gray-900">Cancel Payment Request</h3>
+          <div className="bg-white rounded-lg shadow-lg max-w-md w-full p-8 sm:p-10">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-3xl font-bold text-black">Cancel Payment Request</h3>
               <button
                 onClick={() => setShowCancelModal(false)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-black transition-colors"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -601,36 +631,36 @@ export default function PaymentRequestCard({ request, userAddress, userId, onPay
               </button>
             </div>
 
-            <div className="space-y-3">
-              <p className="text-sm text-gray-700">
+            <div className="space-y-6 mb-6">
+              <p className="text-sm text-black">
                 Are you sure you want to cancel this payment request? This action cannot be undone.
               </p>
               
-              <div className="bg-gray-50 rounded-lg p-3 space-y-1">
+              <div className="border border-gray-300 rounded-lg bg-white p-4 space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Amount:</span>
-                  <span className="font-semibold text-gray-900">
+                  <span className="text-black">Amount:</span>
+                  <span className="font-medium text-black">
                     {formatAmount(request.amount)} {request.token_symbol}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Network:</span>
-                  <span className="font-medium text-gray-700">{request.chain_name}</span>
+                  <span className="text-black">Network:</span>
+                  <span className="font-medium text-black">{request.chain_name}</span>
                 </div>
               </div>
             </div>
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3">
               <button
                 onClick={() => setShowCancelModal(false)}
-                className="flex-1 px-4 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+                className="flex-1 px-4 py-3 bg-gray-200 text-black rounded-full hover:bg-gray-300 transition-colors font-semibold text-sm"
               >
                 Keep Request
               </button>
               <button
                 onClick={handleCancelConfirm}
                 disabled={isCancelling}
-                className="flex-1 px-4 py-2 rounded-lg bg-black text-white text-sm font-semibold hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-3 bg-black text-white rounded-full hover:bg-gray-800 transition-colors font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isCancelling ? 'Cancelling...' : 'Yes, Cancel Request'}
               </button>
@@ -656,19 +686,21 @@ export default function PaymentRequestCard({ request, userAddress, userId, onPay
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               {isOwnRequest ? (
                 <span className="text-sm text-gray-900">
-                  {isPaid && request.paid_by_username ? (
-                    <>You requested from {formatName(request.paid_by_username, request.paid_by_first_name, request.paid_by_last_name) || formatAddress(request.paid_by)} <span className="text-xs text-gray-500">on {request.chain_name}</span></>
+                  {request.recipient_user_id ? (
+                    <>You requested from {formatName(request.recipient_user_id, request.recipient_username, request.recipient_first_name, request.recipient_last_name) || 'user'} <span className="text-xs text-gray-500">on {request.chain_name}</span></>
+                  ) : isPaid && request.paid_by_user_id ? (
+                    <>You requested from {formatName(request.paid_by_user_id, request.paid_by_username, request.paid_by_first_name, request.paid_by_last_name) || formatAddress(request.paid_by)} <span className="text-xs text-gray-500">on {request.chain_name}</span></>
                   ) : (
                     <>You requested payment <span className="text-xs text-gray-500">on {request.chain_name}</span></>
                   )}
                 </span>
               ) : isRequestedFromMe ? (
                 <span className="text-sm text-gray-900">
-                  {formatName(request.requester_username, request.requester_first_name, request.requester_last_name) || formatAddress(request.requester_address)} requested from you <span className="text-xs text-gray-500">on {request.chain_name}</span>
+                  {formatName(request.requester_user_id, request.requester_username, request.requester_first_name, request.requester_last_name) || formatAddress(request.requester_address)} requested from you <span className="text-xs text-gray-500">on {request.chain_name}</span>
                 </span>
               ) : (
                 <span className="text-sm text-gray-900">
-                  {formatName(request.requester_username, request.requester_first_name, request.requester_last_name) || formatAddress(request.requester_address)} requested payment <span className="text-xs text-gray-500">on {request.chain_name}</span>
+                  {formatName(request.requester_user_id, request.requester_username, request.requester_first_name, request.requester_last_name) || formatAddress(request.requester_address)} requested payment <span className="text-xs text-gray-500">on {request.chain_name}</span>
                 </span>
               )}
             </div>

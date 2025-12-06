@@ -4,17 +4,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { ConnectButton, useConnectModal } from '@rainbow-me/rainbowkit';
-import { useAccount, useBalance, useDisconnect } from 'wagmi';
+import { useAccount, useBalance, useDisconnect, useSwitchChain, useChainId, useChains } from 'wagmi';
 import { formatEther } from 'viem';
 import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
 import axios from 'axios';
-import DocumentationModal from '@/components/DocumentationModal';
-import TermsModal from '@/components/TermsModal';
-import SettingsModal from '@/components/SettingsModal';
-import PreferredWalletsModal from '@/components/PreferredWalletsModal';
 import { getUserGradient, getUserInitials, getAvatarStyle } from '@/lib/userAvatar';
 import UserAvatar from '@/components/UserAvatar';
+import { AVAILABLE_CHAINS, getChainConfig } from '@/lib/tokenConfig';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -27,10 +24,7 @@ export default function Header({ onWalletConnect }: HeaderProps) {
   const pathname = usePathname();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isWalletMenuOpen, setIsWalletMenuOpen] = useState(false);
-  const [isDocumentationOpen, setIsDocumentationOpen] = useState(false);
-  const [isTermsOpen, setIsTermsOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isPreferredWalletsOpen, setIsPreferredWalletsOpen] = useState(false);
+  const [showChainMenu, setShowChainMenu] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -50,6 +44,9 @@ export default function Header({ onWalletConnect }: HeaderProps) {
   const { address, isConnected, connector } = useAccount();
   const { disconnect } = useDisconnect();
   const { openConnectModal } = useConnectModal();
+  const { switchChain } = useSwitchChain();
+  const currentChainId = useChainId();
+  const chains = useChains();
   
   // Track if we should open modal after disconnect
   const [shouldOpenModal, setShouldOpenModal] = useState(false);
@@ -118,6 +115,7 @@ export default function Header({ onWalletConnect }: HeaderProps) {
       }
       if (walletMenuRef.current && !walletMenuRef.current.contains(event.target as Node)) {
         setIsWalletMenuOpen(false);
+        setShowChainMenu(false);
       }
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
         setShowSearchResults(false);
@@ -177,6 +175,50 @@ export default function Header({ onWalletConnect }: HeaderProps) {
     }
   };
 
+  const handleSwitchChain = async (targetChainId: number) => {
+    if (!switchChain) {
+      toast.error('Chain switching not available');
+      return;
+    }
+
+    if (currentChainId === targetChainId) {
+      toast.info('Already on this chain');
+      setShowChainMenu(false);
+      setIsWalletMenuOpen(false);
+      return;
+    }
+
+    try {
+      const chainConfig = getChainConfig(targetChainId);
+      const chainName = chainConfig?.name || `Chain ${targetChainId}`;
+      
+      toast.loading(`Switching to ${chainName}...`);
+      
+      await switchChain({ chainId: targetChainId as any });
+      
+      toast.dismiss();
+      toast.success(`Switched to ${chainName}`);
+      
+      setShowChainMenu(false);
+      setIsWalletMenuOpen(false);
+    } catch (error: any) {
+      toast.dismiss();
+      const errorMessage = error?.message || error?.shortMessage || 'Failed to switch chain';
+      const errorCode = error?.code;
+      
+      if (errorCode === 4902 || 
+          errorMessage.includes('Unsupported chain') || 
+          errorMessage.includes('not support') ||
+          errorMessage.includes('Unsupported network')) {
+        toast.error(`Your wallet doesn't support this network. Please add it to your wallet first.`);
+      } else if (errorCode === 4001) {
+        toast.error('Chain switch was rejected');
+      } else {
+        toast.error(errorMessage);
+      }
+    }
+  };
+
   useEffect(() => {
     // Check for authenticated user and fetch profile
     const checkUser = async () => {
@@ -189,11 +231,11 @@ export default function Header({ onWalletConnect }: HeaderProps) {
           // Fetch user profile from users table (with timeout)
           try {
             const profilePromise = supabase
-              .from('users')
+            .from('users')
               .select('first_name, last_name, username, profile_image_url')
-              .eq('id', session.user.id)
-              .single();
-            
+            .eq('id', session.user.id)
+            .single();
+          
             const profileTimeoutPromise = new Promise((_, reject) => {
               setTimeout(() => reject(new Error('Profile fetch timeout')), 3000);
             });
@@ -203,14 +245,14 @@ export default function Header({ onWalletConnect }: HeaderProps) {
               profileTimeoutPromise
             ]) as { data: any; error: any };
             
-            if (!error && profile) {
-              setUserProfile(profile);
-            } else {
-              // Fallback to user_metadata if profile not found
-              setUserProfile({
-                first_name: session.user.user_metadata?.first_name || '',
-                last_name: session.user.user_metadata?.last_name || '',
-                username: session.user.user_metadata?.username || '',
+          if (!error && profile) {
+            setUserProfile(profile);
+          } else {
+            // Fallback to user_metadata if profile not found
+            setUserProfile({
+              first_name: session.user.user_metadata?.first_name || '',
+              last_name: session.user.user_metadata?.last_name || '',
+              username: session.user.user_metadata?.username || '',
                 profile_image_url: session.user.user_metadata?.profile_image_url || null,
               });
             }
@@ -249,11 +291,11 @@ export default function Header({ onWalletConnect }: HeaderProps) {
         // Fetch user profile from users table (with timeout)
         try {
           const profilePromise = supabase
-            .from('users')
+          .from('users')
             .select('first_name, last_name, username, profile_image_url')
-            .eq('id', session.user.id)
-            .single();
-          
+          .eq('id', session.user.id)
+          .single();
+        
           const profileTimeoutPromise = new Promise((_, reject) => {
             setTimeout(() => reject(new Error('Profile fetch timeout')), 3000);
           });
@@ -263,14 +305,14 @@ export default function Header({ onWalletConnect }: HeaderProps) {
             profileTimeoutPromise
           ]) as { data: any; error: any };
           
-          if (!error && profile) {
-            setUserProfile(profile);
-          } else {
-            // Fallback to user_metadata if profile not found
-            setUserProfile({
-              first_name: session.user.user_metadata?.first_name || '',
-              last_name: session.user.user_metadata?.last_name || '',
-              username: session.user.user_metadata?.username || '',
+        if (!error && profile) {
+          setUserProfile(profile);
+        } else {
+          // Fallback to user_metadata if profile not found
+          setUserProfile({
+            first_name: session.user.user_metadata?.first_name || '',
+            last_name: session.user.user_metadata?.last_name || '',
+            username: session.user.user_metadata?.username || '',
               profile_image_url: session.user.user_metadata?.profile_image_url || null,
             });
           }
@@ -443,7 +485,7 @@ export default function Header({ onWalletConnect }: HeaderProps) {
       setSearching(true);
 
       const response = await axios.get(`${API_URL}/users/search`, {
-        params: { q: cleanQuery },
+        params: { q: cleanQuery, userId: currentUserId },
         timeout: 5000
       });
 
@@ -518,12 +560,12 @@ export default function Header({ onWalletConnect }: HeaderProps) {
             {/* Logo */}
             <div className="flex items-center flex-shrink-0 bg-white">
               <Link href="/feed" className="inline-block bg-white">
-            <img 
+                <img 
                   src="/applogo.png" 
-              alt="Xelli" 
+                  alt="Zemme" 
                   className="w-12 h-12 object-contain bg-white"
                   style={{ backgroundColor: '#ffffff' }}
-            />
+                />
               </Link>
             </div>
 
@@ -546,7 +588,7 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                       }
                     }}
                     placeholder="Search users or transactions..."
-                    className="w-full pl-12 pr-10 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400 text-sm"
+                    className="w-full pl-12 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400 text-sm"
                   />
                   {searchQuery && (
                     <button
@@ -567,7 +609,7 @@ export default function Header({ onWalletConnect }: HeaderProps) {
 
                 {/* Search Results Dropdown */}
                 {showSearchResults && (
-                  <div className="absolute z-[9999] w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-auto">
+                  <div className="absolute z-[9999] w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-80 overflow-auto">
                     {searching ? (
                       <div className="p-4 text-center">
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-black mx-auto mb-2"></div>
@@ -575,39 +617,75 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                       </div>
                     ) : searchResults.length > 0 ? (
                       <div className="py-2">
-                        <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100">
+                        <div className="px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide border-b border-gray-200">
                           Users
                         </div>
-                        {searchResults.map((user: any) => (
-                          <div
-                            key={user.id}
-                            className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
-                            onClick={() => handleUserSelect(user)}
-                          >
-                            {/* Avatar - uses profile_image_url from database */}
-                            <UserAvatar
-                              userId={user.id}
-                              firstName={user.first_name}
-                              lastName={user.last_name}
-                              username={user.username}
-                              email={user.email}
-                              profileImageUrl={user.profile_image_url}
-                              size="md"
-                            />
-                            
-                            {/* User Info */}
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-semibold text-black text-sm">
-                                {user.first_name && user.last_name 
-                                  ? `${user.first_name} ${user.last_name}`
-                                  : user.first_name || user.username || 'User'}
-                              </h3>
-                              {user.username && (
-                                <p className="text-xs text-gray-500 mt-0.5">@{user.username}</p>
+                        {searchResults.map((user: any, index: number) => {
+                          const isContact = user.isContact || false;
+                          const isFirstNonContact = !isContact && index > 0 && searchResults[index - 1]?.isContact;
+                          
+                          return (
+                            <div key={user.id}>
+                              {isFirstNonContact && (
+                                <div className="px-4 py-2 text-xs font-medium text-gray-500 bg-gray-50 border-t border-b border-gray-200">
+                                  Others
+                                </div>
                               )}
+                              <div
+                                className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors border-b border-gray-200 last:border-b-0"
+                                onClick={() => handleUserSelect(user)}
+                              >
+                                {/* Avatar - uses profile_image_url from database */}
+                                <UserAvatar
+                                  userId={user.id}
+                                  firstName={user.first_name}
+                                  lastName={user.last_name}
+                                  username={user.username}
+                                  email={user.email}
+                                  profileImageUrl={user.profile_image_url}
+                                  size="md"
+                                />
+                                
+                                {/* User Info */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="font-medium text-black text-sm">
+                                      {(() => {
+                                        // Check if nickname matches the search (for highlighting)
+                                        const searchTerm = searchQuery.replace(/^@+/, '').trim().toLowerCase();
+                                        const nicknameMatches = user.nickname && user.nickname.toLowerCase().includes(searchTerm);
+                                        const displayName = user.first_name && user.last_name 
+                                          ? `${user.first_name} ${user.last_name}`
+                                          : user.first_name || user.displayName || user.username || 'User';
+                                        // Show nickname first if it matches the search, otherwise show displayName
+                                        const primaryName = nicknameMatches ? user.nickname : displayName;
+                                        const secondaryName = nicknameMatches ? displayName : (user.nickname || null);
+                                        return (
+                                          <>
+                                            {primaryName}
+                                            {secondaryName && (
+                                              <span className="ml-2 text-gray-400 font-normal">({secondaryName})</span>
+                                            )}
+                                          </>
+                                        );
+                                      })()}
+                                    </h3>
+                                    {isContact && (
+                                      <span className="text-xs px-2 py-0.5 bg-gray-200 text-black rounded-full font-medium">
+                                        Contact
+                                      </span>
+                                    )}
+                                  </div>
+                                  {user.username && (
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                      @{user.username}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : searchQuery.trim().length >= 1 ? (
                       <div className="p-4 text-center">
@@ -620,34 +698,6 @@ export default function Header({ onWalletConnect }: HeaderProps) {
               </div>
             ) : null}
 
-            {/* Navigation Tabs */}
-            {loading ? null : user ? (
-              <div className="flex items-center gap-1">
-                {/* Activity Tab */}
-                <Link
-                  href="/feed"
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                    pathname === '/feed' || pathname === '/'
-                      ? 'bg-gray-100 text-black font-medium'
-                      : 'text-gray-600 hover:text-black hover:bg-gray-50'
-                  }`}
-                >
-                  <span className="text-sm">Activity</span>
-                </Link>
-
-                {/* Pay & Request Tab */}
-                <Link
-                  href="/pay-request"
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                    pathname === '/pay-request' || pathname?.includes('/payment-request') || pathname?.includes('/market')
-                      ? 'bg-gray-100 text-black font-medium'
-                      : 'text-gray-600 hover:text-black hover:bg-gray-50'
-                  }`}
-                >
-                  <span className="text-sm">Pay & Request</span>
-                </Link>
-              </div>
-            ) : null}
 
             {/* Right Side Actions */}
             {loading ? null : user ? (
@@ -659,6 +709,9 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                       onClick={() => {
                         setIsWalletMenuOpen(!isWalletMenuOpen);
                         setIsUserMenuOpen(false);
+                        if (!isWalletMenuOpen) {
+                          setShowChainMenu(false);
+                        }
                       }}
                       className={`flex items-center gap-2 px-3 py-2 rounded-full transition-all h-10 border border-black ${
                         isWalletMenuOpen
@@ -715,6 +768,51 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                         >
                           Switch Wallet
                         </button>
+                        <div className="relative">
+                          <button
+                            onClick={() => setShowChainMenu(!showChainMenu)}
+                            className={`w-full px-4 py-2 text-left text-sm transition-colors flex items-center justify-between ${
+                              showChainMenu ? 'bg-gray-50 text-gray-900' : 'text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
+                            <span>Switch Chain</span>
+                            <svg 
+                              className={`w-4 h-4 transition-transform ${showChainMenu ? 'rotate-180' : ''}`}
+                              fill="none" 
+                              viewBox="0 0 24 24" 
+                              stroke="currentColor"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </button>
+                          {showChainMenu && (
+                            <div className="w-full bg-gray-50 border-t border-gray-200">
+                              {AVAILABLE_CHAINS.map((chain) => {
+                                const chainId = typeof chain.id === 'string' ? parseInt(chain.id) : chain.id;
+                                const isActive = currentChainId === chainId;
+                                return (
+                                  <button
+                                    key={chain.id}
+                                    onClick={() => handleSwitchChain(chainId)}
+                                    disabled={isActive}
+                                    className={`w-full px-8 py-2 text-left text-sm transition-colors ${
+                                      isActive
+                                        ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                                        : 'text-gray-700 hover:bg-gray-100'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span>{chain.name}</span>
+                                      {isActive && (
+                                        <span className="text-xs text-gray-400">Current</span>
+                                      )}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
                         <button
                           onClick={disconnectWallet}
                           className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 transition-colors"
@@ -789,18 +887,16 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                             </div>
                           )}
                         </div>
-                        <button 
-                          onClick={() => {
-                            setIsUserMenuOpen(false);
-                            setIsSettingsOpen(true);
-                          }}
+                        <Link
+                          href="/settings"
+                          onClick={() => setIsUserMenuOpen(false)}
                           className="p-1 hover:bg-gray-100 rounded"
                         >
                           <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                           </svg>
-                        </button>
+                        </Link>
                       </div>
 
                       {/* Dark Mode Toggle */}
@@ -817,37 +913,31 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                       </div>
 
                       {/* Set Preferred Wallets */}
-                      <button
-                        onClick={() => {
-                          setIsUserMenuOpen(false);
-                          setIsPreferredWalletsOpen(true);
-                        }}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      <Link
+                        href="/settings?tab=preferred-wallets"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors block"
                       >
                         Set Preferred Wallets
-                      </button>
+                      </Link>
 
                       {/* Documentation */}
-                      <button
-                        onClick={() => {
-                          setIsUserMenuOpen(false);
-                          setIsDocumentationOpen(true);
-                        }}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      <Link
+                        href="/settings?tab=documentation"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors block"
                       >
                         Documentation
-                      </button>
+                      </Link>
 
                       {/* Terms of Use */}
-                      <button
-                        onClick={() => {
-                          setIsUserMenuOpen(false);
-                          setIsTermsOpen(true);
-                        }}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      <Link
+                        href="/settings?tab=terms"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors block"
                       >
                         Terms of Use
-                      </button>
+                      </Link>
 
                       {/* Logout */}
                       <button
@@ -878,29 +968,62 @@ export default function Header({ onWalletConnect }: HeaderProps) {
             )}
           </div>
         </div>
+
+        {/* Subheader Navigation */}
+        {loading ? null : user ? (
+          <div className="bg-white">
+            <div className="mx-auto px-4 sm:px-6 max-w-7xl flex justify-center">
+              <div className="flex items-center bg-gray-100 rounded-full p-1 gap-1">
+                {/* Activity */}
+                <Link
+                  href="/feed"
+                  className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all rounded-full ${
+                    pathname === '/feed' || pathname === '/'
+                      ? 'bg-white text-black shadow-sm'
+                      : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Activity
+                </Link>
+
+                {/* Pay & Request */}
+                <Link
+                  href="/pay-request"
+                  className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all rounded-full ${
+                    pathname === '/pay-request' || pathname?.includes('/payment-request') || pathname?.includes('/pay') || pathname?.includes('/request')
+                      ? 'bg-white text-black shadow-sm'
+                      : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                  </svg>
+                  Pay & Request
+                </Link>
+
+                {/* Profile/Settings */}
+                <Link
+                  href="/settings"
+                  className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-all rounded-full ${
+                    pathname === '/settings' || pathname === '/profile'
+                      ? 'bg-white text-black shadow-sm'
+                      : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  Profile
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </header>
 
-      {/* Modals */}
-      <DocumentationModal 
-        isOpen={isDocumentationOpen} 
-        onClose={() => setIsDocumentationOpen(false)} 
-      />
-      <TermsModal 
-        isOpen={isTermsOpen} 
-        onClose={() => setIsTermsOpen(false)} 
-      />
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        user={user}
-        userProfile={userProfile}
-        onUpdate={refreshUserProfile}
-      />
-      <PreferredWalletsModal
-        isOpen={isPreferredWalletsOpen}
-        onClose={() => setIsPreferredWalletsOpen(false)}
-        userId={user?.id || ''}
-      />
     </>
   );
 }

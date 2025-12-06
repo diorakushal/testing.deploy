@@ -38,7 +38,14 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 interface PaymentRequest {
   id: string;
   requester_address: string;
+  requester_user_id?: string | null;
   requester_username?: string | null; // Username from authenticated user account
+  requester_first_name?: string | null;
+  requester_last_name?: string | null;
+  recipient_user_id?: string | null;
+  recipient_username?: string | null;
+  recipient_first_name?: string | null;
+  recipient_last_name?: string | null;
   amount: string | number;
   token_symbol: string;
   token_address: string;
@@ -47,7 +54,10 @@ interface PaymentRequest {
   caption: string | null;
   status: string;
   paid_by?: string | null;
+  paid_by_user_id?: string | null;
   paid_by_username?: string | null; // Username of the payer
+  paid_by_first_name?: string | null;
+  paid_by_last_name?: string | null;
   tx_hash?: string | null;
   created_at: string;
   paid_at?: string | null;
@@ -86,6 +96,7 @@ export default function Feed() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [contacts, setContacts] = useState<any[]>([]);
   const fetchingRef = useRef(false);
   const initialLoadRef = useRef(false);
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -597,6 +608,17 @@ export default function Feed() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Only run once on mount - use refs to access current state
 
+  // Fetch contacts for nickname lookup
+  const fetchContacts = useCallback(async (userId: string) => {
+    try {
+      const response = await axios.get(`${API_URL}/contacts?userId=${userId}`);
+      setContacts(response.data || []);
+    } catch (error: any) {
+      console.error('Error fetching contacts:', error);
+      // Don't show error toast - contacts are optional
+    }
+  }, []);
+
   // Refresh data when navigating to this page (pathname changes to /feed)
   useEffect(() => {
     if (pathname === '/feed' && user && !checkingAuth) {
@@ -608,6 +630,7 @@ export default function Feed() {
         fetchPaymentRequests(false);
       }
       fetchPaymentSends();
+      fetchContacts(user.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, user, checkingAuth]); // Re-fetch when pathname changes to /feed and user/auth is ready
@@ -668,6 +691,7 @@ export default function Feed() {
                         send={send}
                         userAddress={connectedAddress}
                         userId={user?.id || null}
+                        contacts={contacts}
                       />
                     );
                   } else {
@@ -679,6 +703,7 @@ export default function Feed() {
                         request={request}
                         userAddress={connectedAddress}
                         userId={user?.id || null}
+                        contacts={contacts}
                         onPaymentSuccess={() => {
                           fetchPaymentRequests();
                           fetchPaymentSends();
