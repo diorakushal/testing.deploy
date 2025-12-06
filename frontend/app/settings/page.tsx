@@ -1041,6 +1041,16 @@ export default function SettingsPage() {
                             <div className="flex items-center gap-2 flex-shrink-0">
                               <button
                                 onClick={() => {
+                                  setEditingContactId(contact.id);
+                                  setEditingNickname(contact.nickname || '');
+                                }}
+                                disabled={loading}
+                                className="px-3 py-1.5 text-sm text-black border border-gray-300 rounded-full hover:bg-gray-50 font-medium transition-colors disabled:opacity-50"
+                              >
+                                {contact.nickname ? 'Edit' : 'Add Nickname'}
+                              </button>
+                              <button
+                                onClick={() => {
                                   const username = contact.user?.username;
                                   if (username) {
                                     router.push(`/pay?to=${username}`);
@@ -1062,16 +1072,6 @@ export default function SettingsPage() {
                                 className="px-3 py-1.5 text-sm bg-gray-200 text-black rounded-full hover:bg-gray-300 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 Request
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingContactId(contact.id);
-                                  setEditingNickname(contact.nickname || '');
-                                }}
-                                disabled={loading}
-                                className="px-3 py-1.5 text-sm text-black border border-gray-300 rounded-full hover:bg-gray-50 font-medium transition-colors disabled:opacity-50"
-                              >
-                                {contact.nickname ? 'Edit' : 'Add Nickname'}
                               </button>
                               <button
                                 onClick={() => handleDeleteContact(contact.id)}
