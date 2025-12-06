@@ -62,7 +62,7 @@ export default function TermsModal({ isOpen, onClose }: TermsModalProps) {
         </div>
 
         {/* Content */}
-        <div className="p-4 space-y-2 flex-1 text-xs">
+        <div className="p-4 space-y-2 flex-1 text-xs overflow-y-auto">
           <section>
             <p className="text-gray-700 leading-relaxed text-xs">
               Welcome to Zemme. These Terms of Use ("Terms") govern your access to and use of the Zemme platform 

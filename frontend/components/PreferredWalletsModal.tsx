@@ -33,6 +33,9 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId }: Prefe
   const [preferredWallets, setPreferredWallets] = useState<PreferredWallet[]>([]);
   const [loading, setLoading] = useState(false);
   const [connectingChain, setConnectingChain] = useState<number | string | null>(null);
+  const [editingChain, setEditingChain] = useState<number | string | null>(null);
+  const [manualAddress, setManualAddress] = useState('');
+  const [addressError, setAddressError] = useState('');
   const currentChainIdRef = useRef(currentChainId);
   
   // Keep ref in sync with current chain ID
@@ -243,6 +246,85 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId }: Prefe
     }
   };
 
+  const handleEditWallet = (chainId: number | string, currentAddress?: string) => {
+    setEditingChain(chainId);
+    setManualAddress(currentAddress || '');
+    setAddressError('');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingChain(null);
+    setManualAddress('');
+    setAddressError('');
+  };
+
+  const handleSaveManualAddress = async (targetChainId: number | string) => {
+    const trimmedAddress = manualAddress.trim();
+    
+    // Validate address
+    if (!trimmedAddress) {
+      setAddressError('Please enter a wallet address');
+      return;
+    }
+
+    if (!isAddress(trimmedAddress)) {
+      setAddressError('Invalid wallet address format');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setAddressError('');
+      toast.loading('Saving wallet address...');
+      
+      const response = await axios.post(`${API_URL}/preferred-wallets`, {
+        userId,
+        chainId: targetChainId,
+        receivingWalletAddress: trimmedAddress
+      });
+
+      toast.dismiss();
+      toast.success('Wallet address saved!');
+      
+      // Update state
+      const savedWallet: PreferredWallet = response.data;
+      setPreferredWallets(prev => {
+        const existing = prev.find(w => {
+          const wChainId = typeof w.chain_id === 'string' ? parseInt(w.chain_id) : w.chain_id;
+          return wChainId === targetChainId;
+        });
+        if (existing) {
+          return prev.map(w => {
+            const wChainId = typeof w.chain_id === 'string' ? parseInt(w.chain_id) : w.chain_id;
+            return wChainId === targetChainId ? savedWallet : w;
+          });
+        } else {
+          return [...prev, savedWallet];
+        }
+      });
+      
+      // Refresh from server
+      await fetchPreferredWallets();
+      
+      // Reset edit state
+      setEditingChain(null);
+      setManualAddress('');
+      setLoading(false);
+    } catch (error: any) {
+      toast.dismiss();
+      console.error('Error saving manual address:', error);
+      
+      if (error?.response?.data?.error) {
+        setAddressError(error.response.data.error);
+        toast.error(error.response.data.error);
+      } else {
+        setAddressError('Failed to save wallet address');
+        toast.error('Failed to save wallet address');
+      }
+      setLoading(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -272,8 +354,9 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId }: Prefe
         <div className="overflow-y-auto px-6 py-6 flex-1 min-h-0 scrollbar-hide">
           <div className="space-y-4">
             <p className="text-sm text-gray-600 mb-4">
-              Connect your wallets for each chain where you want to receive payments. When someone sends you a payment, 
-              they'll see your preferred wallet addresses for the chains you've configured.
+              Connect your wallets for each chain where you want to receive payments. You can either connect your wallet 
+              or manually enter a wallet address. When someone sends you a payment, they'll see your preferred wallet 
+              addresses for the chains you've configured.
             </p>
 
             {/* Wallets Table */}
@@ -298,7 +381,26 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId }: Prefe
                           <span className="text-sm font-medium text-gray-900">{chain.name}</span>
                         </td>
                         <td className="px-4 py-3">
-                          {wallet ? (
+                          {editingChain === chainId ? (
+                            <div className="space-y-2">
+                              <input
+                                type="text"
+                                value={manualAddress}
+                                onChange={(e) => {
+                                  setManualAddress(e.target.value);
+                                  setAddressError('');
+                                }}
+                                placeholder="0x..."
+                                className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-black ${
+                                  addressError ? 'border-red-500' : 'border-gray-300'
+                                }`}
+                                disabled={loading}
+                              />
+                              {addressError && (
+                                <p className="text-xs text-red-600">{addressError}</p>
+                              )}
+                            </div>
+                          ) : wallet ? (
                             <span className="text-sm font-mono text-gray-600">
                               {`${wallet.receiving_wallet_address.slice(0, 6)}...${wallet.receiving_wallet_address.slice(-4)}`}
                             </span>
@@ -307,22 +409,57 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId }: Prefe
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          {wallet ? (
-                            <button
-                              onClick={() => handleRemoveWallet(wallet.id, chain.name)}
-                              disabled={loading}
-                              className="text-sm text-red-600 hover:text-red-700 font-medium disabled:opacity-50"
-                            >
-                              Remove
-                            </button>
+                          {editingChain === chainId ? (
+                            <div className="flex items-center gap-2 justify-end">
+                              <button
+                                onClick={handleCancelEdit}
+                                disabled={loading}
+                                className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-800 font-medium disabled:opacity-50"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => handleSaveManualAddress(chain.id)}
+                                disabled={loading || !manualAddress.trim()}
+                                className="px-3 py-1.5 text-sm bg-black text-white rounded-full hover:bg-gray-800 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {loading ? 'Saving...' : 'Save'}
+                              </button>
+                            </div>
+                          ) : wallet ? (
+                            <div className="flex items-center gap-2 justify-end">
+                              <button
+                                onClick={() => handleEditWallet(chainId, wallet.receiving_wallet_address)}
+                                disabled={loading}
+                                className="px-3 py-1.5 text-sm text-blue-600 border border-blue-600 rounded-full hover:bg-blue-50 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleRemoveWallet(wallet.id, chain.name)}
+                                disabled={loading}
+                                className="px-3 py-1.5 text-sm text-red-600 border border-red-600 rounded-full hover:bg-red-50 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Remove
+                              </button>
+                            </div>
                           ) : (
-                            <button
-                              onClick={() => handleAddWallet(chain.id)}
-                              disabled={loading || isConnecting}
-                              className="px-3 py-1.5 text-sm bg-black text-white rounded-full hover:bg-gray-800 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {isConnecting ? 'Connecting...' : 'Add Wallet'}
-                            </button>
+                            <div className="flex items-center gap-2 justify-end">
+                              <button
+                                onClick={() => handleEditWallet(chainId)}
+                                disabled={loading}
+                                className="px-3 py-1.5 text-sm text-gray-700 border border-gray-300 rounded-full hover:bg-gray-50 transition-colors font-medium disabled:opacity-50"
+                              >
+                                Manual Entry
+                              </button>
+                              <button
+                                onClick={() => handleAddWallet(chain.id)}
+                                disabled={loading || isConnecting}
+                                className="px-3 py-1.5 text-sm bg-black text-white rounded-full hover:bg-gray-800 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
