@@ -39,6 +39,10 @@ export default function Header({ onWalletConnect }: HeaderProps) {
   const [searching, setSearching] = useState(false);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  
+  // Profile modal state
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   // Use wagmi hooks for wallet connection
   const { address, isConnected, connector } = useAccount();
@@ -182,7 +186,7 @@ export default function Header({ onWalletConnect }: HeaderProps) {
     }
 
     if (currentChainId === targetChainId) {
-      toast.info('Already on this chain');
+      toast.success('Already on this chain');
       setShowChainMenu(false);
       setIsWalletMenuOpen(false);
       return;
@@ -539,16 +543,13 @@ export default function Header({ onWalletConnect }: HeaderProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, currentUserId]);
 
-  const handleUserSelect = (selectedUser: any) => {
-    if (selectedUser.username) {
-      // Copy username to clipboard and navigate to Pay page
-      navigator.clipboard.writeText(`@${selectedUser.username}`);
-      toast.success(`Username @${selectedUser.username} copied! Navigating to Pay...`);
+  const handleUserSelect = (user: any) => {
+    if (user.username) {
       setSearchQuery('');
       setShowSearchResults(false);
-      setTimeout(() => {
-        router.push(`/pay?to=${encodeURIComponent(`@${selectedUser.username}`)}`);
-      }, 500);
+      router.push(`/user/${user.username}`);
+    } else {
+      toast.error('User does not have a username');
     }
   };
 
@@ -562,18 +563,18 @@ export default function Header({ onWalletConnect }: HeaderProps) {
               <Link href="/feed" className="inline-flex items-center gap-3 bg-white">
                 <img 
                   src="/applogo.png" 
-                  alt="Zemme" 
+                  alt="Blockbook" 
                   className="w-12 h-12 object-contain bg-white"
                   style={{ backgroundColor: '#ffffff' }}
                 />
-                <h1 className="text-xl font-bold text-black" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', letterSpacing: '-0.02em' }}>zemme</h1>
+                <h1 className="text-xl font-bold text-black" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', letterSpacing: '-0.02em' }}>blockbook</h1>
               </Link>
             </div>
 
             {/* Search Bar */}
             {loading ? null : user ? (
               <div className="flex-1 max-w-xl mx-6 relative" ref={searchRef}>
-                <div className="relative">
+                <div className="relative bg-gray-100 rounded-full p-1">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                     <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -589,7 +590,7 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                       }
                     }}
                     placeholder="Search users or transactions..."
-                    className="w-full pl-12 pr-10 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400 text-sm"
+                    className="w-full pl-12 pr-10 py-2 border-0 rounded-full focus:outline-none focus:ring-0 transition-all bg-transparent text-black placeholder-gray-400 text-sm font-semibold"
                   />
                   {searchQuery && (
                     <button
@@ -833,7 +834,7 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                 <div className="h-6 w-px bg-gray-200"></div>
 
                 {/* User Profile */}
-                <div className="relative flex items-center" ref={userMenuRef}>
+                <div className="relative flex items-center gap-2" ref={userMenuRef}>
                   <button
                     onClick={() => {
                       setIsUserMenuOpen(!isUserMenuOpen);
@@ -872,6 +873,29 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
+                  
+                  {/* Share Profile Button */}
+                  {userProfile?.username && (
+                    <button
+                      onClick={async () => {
+                        const profileUrl = `${window.location.origin}/${userProfile.username}`;
+                        try {
+                          await navigator.clipboard.writeText(profileUrl);
+                          toast.success('Profile link copied to clipboard!');
+                        } catch (error) {
+                          console.error('Failed to copy link:', error);
+                          toast.error('Failed to copy link');
+                        }
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-full hover:bg-gray-50 transition-colors"
+                      title="Share profile"
+                    >
+                      <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                      </svg>
+                      <span className="text-sm text-gray-600 font-medium">Share</span>
+                    </button>
+                  )}
 
                   {/* User Dropdown Menu */}
                   {isUserMenuOpen && (
@@ -899,6 +923,29 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                           </svg>
                         </Link>
                       </div>
+
+                      {/* Share Profile */}
+                      {userProfile?.username && (
+                        <button
+                          onClick={async () => {
+                            const profileUrl = `${window.location.origin}/${userProfile.username}`;
+                            try {
+                              await navigator.clipboard.writeText(profileUrl);
+                              toast.success('Profile link copied to clipboard!');
+                              setIsUserMenuOpen(false);
+                            } catch (error) {
+                              console.error('Failed to copy link:', error);
+                              toast.error('Failed to copy link');
+                            }
+                          }}
+                          className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2"
+                        >
+                          <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                          </svg>
+                          Share Profile
+                        </button>
+                      )}
 
                       {/* Dark Mode Toggle */}
                       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">

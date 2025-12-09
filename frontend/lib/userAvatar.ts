@@ -175,24 +175,22 @@ export interface ProfileIcon {
 }
 
 const profileIcons: ProfileIcon[] = [
-  { icon: '👤', background: 'linear-gradient(135deg, #2952FF 0%, #001f54 100%)' }, // 0 - Brand Blue to Navy
-  { icon: '🎭', background: 'linear-gradient(135deg, #00D07E 0%, #06b6d4 100%)' }, // 1 - Brand Green to Cyan
-  { icon: '🎨', background: 'linear-gradient(135deg, #06b6d4 0%, #2952FF 100%)' }, // 2 - Cyan to Brand Blue
-  { icon: '🌟', background: 'linear-gradient(135deg, #00D07E 0%, #0891b2 100%)' }, // 3 - Brand Green to Dark Cyan
-  { icon: '🚀', background: 'linear-gradient(135deg, #2952FF 0%, #06b6d4 100%)' }, // 4 - Brand Blue to Cyan
-  { icon: '🎯', background: 'linear-gradient(135deg, #001f54 0%, #00D07E 100%)' }, // 5 - Navy to Brand Green
-  { icon: '⚡', background: 'linear-gradient(135deg, #06b6d4 0%, #00D07E 100%)' }, // 6 - Cyan to Brand Green
-  { icon: '🎪', background: 'linear-gradient(135deg, #0891b2 0%, #2952FF 100%)' }, // 7 - Dark Cyan to Brand Blue
+  { icon: '●', background: 'linear-gradient(135deg, #2952FF 0%, #001f54 100%)' }, // 0 - Brand Blue to Navy
+  { icon: '●', background: 'linear-gradient(135deg, #00D07E 0%, #06b6d4 100%)' }, // 1 - Brand Green to Cyan
+  { icon: '●', background: 'linear-gradient(135deg, #06b6d4 0%, #2952FF 100%)' }, // 2 - Cyan to Brand Blue
+  { icon: '●', background: 'linear-gradient(135deg, #00D07E 0%, #0891b2 100%)' }, // 3 - Brand Green to Dark Cyan
+  { icon: '●', background: 'linear-gradient(135deg, #2952FF 0%, #06b6d4 100%)' }, // 4 - Brand Blue to Cyan
+  { icon: '●', background: 'linear-gradient(135deg, #001f54 0%, #00D07E 100%)' }, // 5 - Navy to Brand Green
+  { icon: '●', background: 'linear-gradient(135deg, #06b6d4 0%, #00D07E 100%)' }, // 6 - Cyan to Brand Green
+  { icon: '●', background: 'linear-gradient(135deg, #0891b2 0%, #2952FF 100%)' }, // 7 - Dark Cyan to Brand Blue
 ];
 
 /**
  * Get profile icon based on profile_image_url (0-7)
- * Returns null if invalid, which will fallback to gradient avatar
+ * Returns null to always use gradient avatar with initials (emojis removed)
  */
 export function getProfileIcon(profileImageUrl: number): ProfileIcon | null {
-  if (profileImageUrl >= 0 && profileImageUrl <= 7) {
-    return profileIcons[profileImageUrl];
-  }
+  // Always return null to use gradient avatar with initials instead of emojis
   return null;
 }
 

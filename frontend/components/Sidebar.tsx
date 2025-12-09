@@ -280,16 +280,16 @@ export default function Sidebar({ onWalletConnect }: SidebarProps) {
       <aside className="fixed left-0 top-0 h-screen w-64 bg-gray-800 flex flex-col z-50 overflow-hidden">
         {/* Header Section - Matching Login Page Style */}
         <div className="flex-shrink-0 px-4 pt-6 pb-6">
-          {/* Logo and Zemme Text - Left Aligned */}
+          {/* Logo and Blockbook Text - Left Aligned */}
           <Link href="/feed" className="flex items-center gap-3">
             <div className="w-10 h-10 bg-black rounded flex items-center justify-center flex-shrink-0">
               <img 
                 src="/applogo.png" 
-                alt="Zemme" 
+                alt="Blockbook" 
                 className="w-8 h-8 object-contain"
               />
             </div>
-            <h1 className="text-xl font-bold text-white" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', letterSpacing: '-0.02em' }}>zemme</h1>
+            <h1 className="text-xl font-bold text-white" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', letterSpacing: '-0.02em' }}>blockbook</h1>
           </Link>
         </div>
 
@@ -505,13 +505,13 @@ export default function Sidebar({ onWalletConnect }: SidebarProps) {
           {!mounted || loading ? null : user ? (
             <>
               {/* Profile Section - Matching Reference Style */}
-              <div className="relative" ref={userMenuRef}>
+              <div className="relative flex items-center gap-2" ref={userMenuRef}>
                 <button
                   onClick={() => {
                     setIsUserMenuOpen(!isUserMenuOpen);
                     setIsWalletMenuOpen(false);
                   }}
-                  className="w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-700/50 transition-colors"
+                  className="flex-1 flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-gray-700/50 transition-colors"
                 >
                   {/* Profile Icon - uses profile_image_url from database */}
                   {user && (
@@ -538,6 +538,31 @@ export default function Sidebar({ onWalletConnect }: SidebarProps) {
                     )}
                   </div>
                 </button>
+                
+                {/* Share Profile Button */}
+                {userProfile?.username && (
+                  <button
+                    onClick={async () => {
+                      const profileUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/${userProfile.username}`;
+                      try {
+                        if (typeof window !== 'undefined' && navigator.clipboard) {
+                          await navigator.clipboard.writeText(profileUrl);
+                          toast.success('Profile link copied to clipboard!');
+                        }
+                      } catch (error) {
+                        console.error('Failed to copy link:', error);
+                        toast.error('Failed to copy link');
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-gray-700/50 transition-colors"
+                    title="Share profile"
+                  >
+                    <svg className="w-4 h-4 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                    </svg>
+                    <span className="text-sm text-gray-300 font-medium">Share</span>
+                  </button>
+                )}
 
                 {/* User Dropdown Menu - Dark Theme */}
                 {isUserMenuOpen && (

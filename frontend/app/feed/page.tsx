@@ -12,7 +12,7 @@
  * 1. REQUIRES AUTHENTICATION - redirects to /login if not authenticated
  * 2. NO MOCK DATA - only shows real data from API (empty state if no data)
  * 3. USES HEADER COMPONENT - must use <Header /> component, NOT custom header
- * 4. ZEMME BRANDING - Header component provides "Zemme" branding
+ * 4. BLOCKBOOK BRANDING - Header component provides "Blockbook" branding
  * 
  * DO NOT:
  * - Add back mock payment request data (mockPaymentRequests array)

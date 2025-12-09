@@ -9,7 +9,7 @@ This file has been permanently updated and **MUST NOT** be reverted to previous 
 1. **Authentication Required** - Page now requires user to be logged in
 2. **No Mock Data** - All mock payment request data has been removed
 3. **Uses Header Component** - Must use `<Header />` component, NOT custom header
-4. **Zemme Branding** - Header component provides "Zemme" branding (not "numo")
+4. **Blockbook Branding** - Header component provides "Blockbook" branding (not "numo")
 
 ### DO NOT:
 
@@ -39,7 +39,7 @@ import Header from '@/components/Header';
 - ✅ Uses `Header` component from `@/components/Header`
 - ✅ Requires authentication (redirects to `/login` if not authenticated)
 - ✅ Shows empty state if no API data (no mock data fallback)
-- ✅ Uses "Zemme" branding via Header component
+- ✅ Uses "Blockbook" branding via Header component
 
 ### Last Updated:
 This file was updated to remove mock data and use Header component. Do not revert.

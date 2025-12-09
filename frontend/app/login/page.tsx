@@ -10,11 +10,19 @@ export default function LoginPage() {
   const router = useRouter();
   const [formData, setFormData] = useState({
     email: '',
-    password: '',
   });
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState('');
+  const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
+
+  // Get redirect URL from query params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const redirect = params.get('redirect');
+    if (redirect) {
+      setRedirectUrl(redirect);
+    }
+  }, []);
 
   useEffect(() => {
     // Check if user is already logged in
@@ -65,48 +73,50 @@ export default function LoginPage() {
       toast.error('Please enter a valid email address');
       return;
     }
-    if (!formData.password) {
-      toast.error('Password is required');
-      return;
-    }
 
     setLoading(true);
     
     try {
-      // Sign in with Supabase Auth
-      const { data, error } = await supabase.auth.signInWithPassword({
+      // Send OTP code to user's email
+      const { error: otpError } = await supabase.auth.signInWithOtp({
         email: formData.email,
-        password: formData.password,
+        options: {
+          shouldCreateUser: false, // Don't create new users on login
+        },
       });
 
-      if (error) {
-        throw error;
+      if (otpError) {
+        // Handle specific Supabase errors
+        // Check for "signups not allowed" or "not found" errors - means user doesn't exist
+        if (otpError.message?.includes('Signups not allowed') || 
+            otpError.message?.includes('not found') || 
+            otpError.message?.includes('does not exist') ||
+            otpError.code === 'signup_disabled') {
+          toast.error('No account found with this email. Please sign up for an account first.');
+          setEmailError('No account found. Please sign up first.');
+          setLoading(false);
+          return;
+        } else {
+          throw otpError;
+        }
       }
 
-      if (data.user) {
-        // Ensure user record exists in public.users table
-        const { ensureUserRecord } = await import('@/lib/auth-utils');
-        await ensureUserRecord(data.user);
-        
-        toast.success('Successfully logged in!');
-        
-        // Redirect to feed page
-        setTimeout(() => {
-          router.replace('/feed');
-        }, 500);
-      }
+      // Success - redirect to verify OTP page
+      toast.success('Verification code sent! Check your email.');
+      const redirectParam = redirectUrl ? `&redirect=${encodeURIComponent(redirectUrl)}` : '';
+      router.push(`/auth/verify-otp?email=${encodeURIComponent(formData.email)}&type=login${redirectParam}`);
     } catch (error: any) {
       console.error('Login error:', error);
       
-      // Handle specific Supabase errors
-      if (error.message?.includes('Invalid login credentials')) {
-        toast.error('Invalid email or password');
-      } else if (error.message?.includes('Email not confirmed')) {
-        toast.error('Please verify your email before logging in');
+      // Handle "signups not allowed" error - means user doesn't exist
+      if (error.message?.includes('Signups not allowed') || 
+          error.message?.includes('signup_disabled') ||
+          error.code === 'signup_disabled') {
+        toast.error('No account found with this email. Please sign up for an account first.');
+        setEmailError('No account found. Please sign up first.');
       } else {
-        toast.error(error.message || 'Failed to log in. Please try again.');
+        toast.error(error.message || 'Failed to send verification code. Please try again.');
       }
-    } finally {
       setLoading(false);
     }
   };
@@ -121,11 +131,11 @@ export default function LoginPage() {
               <Link href="/feed" className="inline-flex items-center gap-3 bg-white">
                 <img 
                   src="/applogo.png" 
-                  alt="Zemme" 
+                  alt="Blockbook" 
                   className="w-16 h-16 object-contain bg-white"
                   style={{ backgroundColor: '#ffffff' }}
                 />
-                <h1 className="text-2xl font-bold text-black" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', letterSpacing: '-0.02em' }}>zemme</h1>
+                <h1 className="text-2xl font-bold text-black" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', letterSpacing: '-0.02em' }}>blockbook</h1>
               </Link>
             </div>
             
@@ -160,54 +170,15 @@ export default function LoginPage() {
                   required
                 />
                 {emailError && (
-                  <p className="text-xs text-red-500 mt-1">{emailError}</p>
-                )}
-              </div>
-
-              {/* Password */}
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-black mb-2">
-                  Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    id="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    className="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400"
-                    placeholder="Password"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-black transition-colors"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? (
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
+                  <div className="mt-1">
+                    <p className="text-xs text-red-500">{emailError}</p>
+                    {emailError.includes('sign up') && (
+                      <Link href="/signup" className="text-xs text-black font-medium hover:underline mt-1 inline-block">
+                        Go to sign up →
+                      </Link>
                     )}
-                  </button>
-                </div>
-              </div>
-
-              {/* Forgot Password Link */}
-              <div className="flex justify-end">
-                <Link
-                  href="/auth/forgot-password"
-                  className="text-sm text-black hover:underline"
-                >
-                  Forgot password?
-                </Link>
+                  </div>
+                )}
               </div>
 
               {/* Submit Button */}
@@ -216,7 +187,7 @@ export default function LoginPage() {
                 disabled={loading}
                 className="w-full px-4 py-3 bg-gray-200 text-black rounded-full hover:bg-gray-300 transition-colors font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Logging in...' : 'Log in'}
+                {loading ? 'Sending code...' : 'Continue'}
               </button>
             </form>
           </div>

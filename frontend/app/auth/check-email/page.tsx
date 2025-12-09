@@ -18,9 +18,10 @@ export default function CheckEmailPage() {
   }, []);
 
   const handleResendEmail = async () => {
-    // TODO: Implement resend email functionality
-    // For now, just show a message
-    alert('Resend email functionality will be implemented');
+    if (!email) return;
+    
+    // Redirect to verify-otp page which has resend functionality
+    window.location.href = `/auth/verify-otp?email=${encodeURIComponent(email)}`;
   };
 
   return (
@@ -30,7 +31,7 @@ export default function CheckEmailPage() {
         <Link href="/feed" className="inline-block bg-white">
           <img 
             src="/applogo.png" 
-            alt="Zemme" 
+            alt="Blockbook" 
             className="w-10 h-10 object-contain bg-white"
             style={{ backgroundColor: '#ffffff' }}
           />
@@ -47,7 +48,7 @@ export default function CheckEmailPage() {
               </h1>
               {email && (
                 <p className="text-gray-600 text-sm mt-2">
-                  We sent a verification link to {email}
+                  We sent an 8-digit verification code to {email}
                 </p>
               )}
             </div>
@@ -55,9 +56,21 @@ export default function CheckEmailPage() {
             {/* Instructions */}
             <div className="mb-8">
               <p className="text-gray-600 text-sm">
-                Click the verification link in your email to verify your account and complete your registration.
+                Enter the 6-digit code from your email to verify your account and complete your registration.
               </p>
             </div>
+
+            {/* Redirect to verify OTP */}
+            {email && (
+              <div className="mb-8">
+                <a
+                  href={`/auth/verify-otp?email=${encodeURIComponent(email)}`}
+                  className="w-full block px-4 py-3 bg-black text-white rounded-full hover:bg-gray-900 active:scale-[0.98] transition-all duration-200 font-medium text-center"
+                >
+                  Enter verification code
+                </a>
+              </div>
+            )}
 
             {/* Resend Link */}
             <div className="mt-8">

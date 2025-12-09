@@ -5,12 +5,16 @@ import Providers from "@/components/WagmiProvider";
 import SidebarWrapper from "@/components/SidebarWrapper";
 
 export const metadata: Metadata = {
-  title: "Zemme - Crypto Requests",
+  title: "Blockbook - Crypto Requests",
   description: "Request and send crypto payments easily",
   icons: {
-    icon: "/websitelogo.png",
-    shortcut: "/websitelogo.png",
-    apple: "/websitelogo.png",
+    icon: [
+      { url: "/favicon-48x48.png", sizes: "48x48", type: "image/png" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
   },
 };
 

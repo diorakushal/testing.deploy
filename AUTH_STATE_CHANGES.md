@@ -151,3 +151,4 @@ ON CONFLICT (id) DO NOTHING;
 - [ ] Handle edge cases (deleted users, orphaned records)
 - [ ] Add admin function to sync all existing users
 
+

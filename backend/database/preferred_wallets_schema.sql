@@ -4,7 +4,7 @@
 CREATE TABLE IF NOT EXISTS preferred_wallets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    chain_id INTEGER NOT NULL, -- 8453 (Base), 1 (Ethereum), 56 (BNB), 137 (Polygon)
+    chain_id VARCHAR(50) NOT NULL, -- 8453 (Base), 1 (Ethereum), 56 (BNB), 137 (Polygon), 42161 (Arbitrum), 10 (Optimism)
     receiving_wallet_address VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

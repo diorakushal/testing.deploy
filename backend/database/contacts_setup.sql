@@ -106,3 +106,4 @@ BEGIN
     RAISE NOTICE 'Check constraint exists: %', EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'no_self_contact');
 END $$;
 
+

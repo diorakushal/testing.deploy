@@ -13,19 +13,23 @@ export default function SignUpPage() {
     lastName: '',
     email: '',
     username: '',
-    password: '',
-    confirmPassword: '',
   });
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [usernameError, setUsernameError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [confirmPasswordError, setConfirmPasswordError] = useState('');
   const [emailError, setEmailError] = useState('');
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [checkingEmail, setCheckingEmail] = useState(false);
+  const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
+
+  // Get redirect URL from query params
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const redirect = params.get('redirect');
+    if (redirect) {
+      setRedirectUrl(redirect);
+    }
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -37,14 +41,6 @@ export default function SignUpPage() {
     // Real-time validation
     if (name === 'username') {
       validateUsername(value);
-    } else if (name === 'password') {
-      validatePassword(value);
-      // Also re-validate confirm password if it's already filled
-      if (formData.confirmPassword) {
-        validateConfirmPassword(formData.confirmPassword, value);
-      }
-    } else if (name === 'confirmPassword') {
-      validateConfirmPassword(value, formData.password);
     } else if (name === 'email') {
       validateEmail(value);
     }
@@ -171,43 +167,6 @@ export default function SignUpPage() {
     }
   };
 
-  const validatePassword = (password: string) => {
-    setPasswordError('');
-    
-    if (!password) {
-      return;
-    }
-
-    // Length check
-    if (password.length < 6) {
-      setPasswordError('Password must be at least 6 characters');
-      return;
-    }
-
-    // Check for mix of characters
-    const hasNumber = /[0-9]/.test(password);
-    const hasUpperCase = /[A-Z]/.test(password);
-    const hasLowerCase = /[a-z]/.test(password);
-    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
-
-    if (!hasNumber || !hasUpperCase || !hasLowerCase || !hasSpecialChar) {
-      setPasswordError('Password must include numbers, uppercase, lowercase, and special characters');
-      return;
-    }
-  };
-
-  const validateConfirmPassword = (confirmPassword: string, password: string) => {
-    setConfirmPasswordError('');
-    
-    if (!confirmPassword) {
-      return;
-    }
-
-    if (confirmPassword !== password) {
-      setConfirmPasswordError('Passwords do not match');
-      return;
-    }
-  };
 
   const validateEmail = (email: string) => {
     setEmailError('');
@@ -256,33 +215,6 @@ export default function SignUpPage() {
       }
       return true;
     } else if (step === 2) {
-      // Validate password
-      if (!formData.password) {
-        toast.error('Password is required');
-        return false;
-      }
-      if (formData.password.length < 6) {
-        toast.error('Password must be at least 6 characters');
-        return false;
-      }
-      const hasNumber = /[0-9]/.test(formData.password);
-      const hasUpperCase = /[A-Z]/.test(formData.password);
-      const hasLowerCase = /[a-z]/.test(formData.password);
-      const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(formData.password);
-      if (!hasNumber || !hasUpperCase || !hasLowerCase || !hasSpecialChar) {
-        toast.error('Password must include numbers, uppercase, lowercase, and special characters');
-        return false;
-      }
-      if (!formData.confirmPassword) {
-        toast.error('Please confirm your password');
-        return false;
-      }
-      if (formData.password !== formData.confirmPassword) {
-        toast.error('Passwords do not match');
-        return false;
-      }
-      return true;
-    } else if (step === 3) {
       // Validate email
       if (!formData.email.trim()) {
         toast.error('Email is required');
@@ -310,9 +242,9 @@ export default function SignUpPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Final validation on step 3
-    if (currentStep === 3) {
-      if (!validateStep(3)) {
+    // Final validation on step 2 (email step)
+    if (currentStep === 2) {
+      if (!validateStep(2)) {
         return;
       }
 
@@ -349,71 +281,42 @@ export default function SignUpPage() {
           return;
         }
 
-        // Sign up user with Supabase Auth
-        // This will automatically send a confirmation email
-        const { data: authData, error: authError } = await supabase.auth.signUp({
+        // Store user data temporarily in sessionStorage for after OTP verification
+        const userData = {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          username: formData.username,
+          email: formData.email.toLowerCase().trim(),
+        };
+        sessionStorage.setItem('pendingSignup', JSON.stringify(userData));
+
+        // Send OTP code to user's email
+        const { error: otpError } = await supabase.auth.signInWithOtp({
           email: formData.email,
-          password: formData.password,
           options: {
+            shouldCreateUser: true, // Allow automatic user creation
             data: {
               first_name: formData.firstName,
               last_name: formData.lastName,
               username: formData.username,
             },
-            emailRedirectTo: `${window.location.origin}/auth/confirm`,
           },
         });
 
-        if (authError) {
-          // Handle Supabase auth errors (including duplicate email)
-          if (authError.message?.includes('already registered') || authError.message?.includes('already exists')) {
+        if (otpError) {
+          // Handle Supabase auth errors
+          if (otpError.message?.includes('already registered') || otpError.message?.includes('already exists')) {
             setEmailError('This email is already registered. Please log in instead.');
             toast.error('This email is already registered. Please log in instead.');
             setLoading(false);
             return;
           }
-          throw authError;
+          throw otpError;
         }
 
-        // If signup was successful (even if user needs email confirmation)
-        if (authData && !authError) {
-          // Store additional user data in a custom users table if user was created
-          if (authData.user) {
-            const { error: profileError } = await supabase
-              .from('users')
-              .insert({
-                id: authData.user.id,
-                email: formData.email.toLowerCase().trim(),
-                first_name: formData.firstName,
-                last_name: formData.lastName,
-                username: formData.username,
-                email_verified: false, // Will be updated when they confirm
-              });
-
-            if (profileError) {
-              // Handle duplicate username or email errors
-              if (profileError.code === '23505') { // Unique constraint violation
-                if (profileError.message?.includes('username')) {
-                  setUsernameError('This username is already taken');
-                  toast.error('This username is already taken. Please choose another.');
-                  setCurrentStep(1);
-                  setLoading(false);
-                  return;
-                } else if (profileError.message?.includes('email')) {
-                  setEmailError('This email is already registered. Please log in instead.');
-                  toast.error('This email is already registered. Please log in instead.');
-                  setLoading(false);
-                  return;
-                }
-              }
-              console.error('Error creating user profile:', profileError);
-            }
-          }
-
-          // Redirect to check-email page immediately
-          router.push(`/auth/check-email?email=${encodeURIComponent(formData.email)}`);
-          return;
-        }
+        // Redirect to verify OTP page
+        const redirectParam = redirectUrl ? `&redirect=${encodeURIComponent(redirectUrl)}` : '';
+        router.push(`/auth/verify-otp?email=${encodeURIComponent(formData.email)}${redirectParam}`);
       } catch (error: any) {
         console.error('Sign up error:', error);
         
@@ -421,10 +324,8 @@ export default function SignUpPage() {
         if (error.message?.includes('already registered') || error.message?.includes('already exists')) {
           setEmailError('This email is already registered. Please log in instead.');
           toast.error('This email is already registered. Please log in instead.');
-        } else if (error.message?.includes('password')) {
-          toast.error('Password does not meet requirements.');
         } else {
-          toast.error(error.message || 'Failed to create account. Please try again.');
+          toast.error(error.message || 'Failed to send verification code. Please try again.');
         }
       } finally {
         setLoading(false);
@@ -442,18 +343,18 @@ export default function SignUpPage() {
               <Link href="/feed" className="inline-flex items-center gap-3 bg-white">
                 <img 
                   src="/applogo.png" 
-                  alt="Zemme" 
+                  alt="Blockbook" 
                   className="w-16 h-16 object-contain bg-white"
                   style={{ backgroundColor: '#ffffff' }}
                 />
-                <h1 className="text-2xl font-bold text-black" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', letterSpacing: '-0.02em' }}>zemme</h1>
+                <h1 className="text-2xl font-bold text-black" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', letterSpacing: '-0.02em' }}>blockbook</h1>
               </Link>
             </div>
             
             {/* Header */}
             <div className="mb-8">
               <h1 className="text-3xl font-bold text-black mb-2">
-                {currentStep === 1 ? "What's your name?" : currentStep === 2 ? "Create a password" : "What's your email?"}
+                {currentStep === 1 ? "What's your name?" : "What's your email?"}
               </h1>
               {currentStep === 1 && (
                 <>
@@ -554,105 +455,8 @@ export default function SignUpPage() {
                 </>
               )}
 
-              {/* Step 2: Password + Confirm Password */}
+              {/* Step 2: Email */}
               {currentStep === 2 && (
-                <>
-              {/* Password */}
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-black mb-2">
-                  Password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    id="password"
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    className={`w-full px-4 py-3 pr-10 border rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400 ${
-                      passwordError ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="Password"
-                    required
-                    minLength={6}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-black transition-colors"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? (
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-                {passwordError ? (
-                  <p className="text-xs text-red-500 mt-1">{passwordError}</p>
-                ) : (
-                  <p className="text-xs text-gray-500 mt-1">
-                    At least 6 characters with numbers, uppercase, lowercase, and special characters
-                  </p>
-                )}
-              </div>
-
-              {/* Confirm Password */}
-              <div>
-                <label htmlFor="confirmPassword" className="block text-sm font-medium text-black mb-2">
-                  Confirm password
-                </label>
-                <div className="relative">
-                  <input
-                    type={showConfirmPassword ? 'text' : 'password'}
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    className={`w-full px-4 py-3 pr-10 border rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400 ${
-                      confirmPasswordError ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="Confirm password"
-                    required
-                    minLength={6}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-black transition-colors"
-                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showConfirmPassword ? (
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                      </svg>
-                    ) : (
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-                {confirmPasswordError ? (
-                  <p className="text-xs text-red-500 mt-1">{confirmPasswordError}</p>
-                ) : (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Re-enter your password to confirm
-                  </p>
-                )}
-              </div>
-                </>
-              )}
-
-              {/* Step 3: Email */}
-              {currentStep === 3 && (
                 <>
               {/* Email */}
               <div>
@@ -685,7 +489,7 @@ export default function SignUpPage() {
                   <p className="text-xs text-red-500 mt-1">{emailError}</p>
                 ) : (
                   <p className="text-xs text-gray-500 mt-1">
-                    We'll send you a confirmation email to verify your address
+                    We'll send you an 8-digit code to verify your email address
                   </p>
                 )}
               </div>
@@ -703,7 +507,7 @@ export default function SignUpPage() {
                     Back
                   </button>
                 )}
-                {currentStep < 3 ? (
+                {currentStep < 2 ? (
                   <button
                     type="button"
                     onClick={handleNext}
@@ -717,7 +521,7 @@ export default function SignUpPage() {
                     disabled={loading}
                     className="w-full px-4 py-3 bg-gray-200 text-black rounded-full hover:bg-gray-300 active:scale-[0.98] transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {loading ? 'Creating account...' : 'Sign up'}
+                    {loading ? 'Sending code...' : 'Send verification code'}
                   </button>
                 )}
               </div>

@@ -30,3 +30,4 @@ WHERE table_name = 'preferred_wallets'
 ORDER BY ordinal_position;
 
 
+

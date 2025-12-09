@@ -40,7 +40,7 @@ export default function DocsModal({ isOpen, onClose }: DocsModalProps) {
         <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between flex-shrink-0">
           <div>
             <h2 className="text-xl font-bold text-black">Documentation</h2>
-            <p className="text-gray-600 text-xs mt-1">Learn how to use Zemme</p>
+            <p className="text-gray-600 text-xs mt-1">Learn how to use Blockbook</p>
           </div>
           <button
             onClick={onClose}
@@ -58,7 +58,7 @@ export default function DocsModal({ isOpen, onClose }: DocsModalProps) {
           <section>
             <h3 className="text-sm font-bold text-black mb-2">Overview</h3>
             <p className="text-gray-700 leading-relaxed text-xs">
-              Zemme is a non-custodial cryptocurrency payment platform that enables seamless wallet-to-wallet transactions. 
+              Blockbook is a non-custodial cryptocurrency payment platform that enables seamless wallet-to-wallet transactions. 
               Create payment requests, send direct payments, and manage your crypto payments across multiple blockchain networks.
             </p>
           </section>

@@ -10,7 +10,7 @@ export default function DocumentationPage() {
           <section>
             <h2 className="text-2xl font-bold text-black mb-3">Overview</h2>
             <p className="text-gray-700 leading-relaxed">
-              Zemme is a non-custodial cryptocurrency payment platform that enables seamless wallet-to-wallet transactions. 
+              Blockbook is a non-custodial cryptocurrency payment platform that enables seamless wallet-to-wallet transactions. 
               Create payment requests, send direct payments, and manage your crypto payments across multiple blockchain networks.
             </p>
           </section>

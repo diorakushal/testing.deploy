@@ -1662,7 +1662,7 @@ app.post('/api/preferred-wallets', async (req, res) => {
 
     // Validate chain ID
     const chainIdNum = parseInt(String(chainId).trim(), 10);
-    const validChainIds = [8453, 1, 56, 137]; // Base, Ethereum, BNB, Polygon
+    const validChainIds = [8453, 1, 56, 137, 42161, 10]; // Base, Ethereum, BNB, Polygon, Arbitrum, Optimism
     
     if (isNaN(chainIdNum) || !validChainIds.includes(chainIdNum)) {
       console.error('[PreferredWalletsAPI] ❌ Invalid chain ID:', {
@@ -1671,7 +1671,7 @@ app.post('/api/preferred-wallets', async (req, res) => {
         validChains: validChainIds
       });
       return res.status(400).json({ 
-        error: `Invalid chain ID: ${chainId}. Valid chain IDs are: 8453 (Base), 1 (Ethereum), 56 (BNB), 137 (Polygon)` 
+        error: `Invalid chain ID: ${chainId}. Valid chain IDs are: 8453 (Base), 1 (Ethereum), 56 (BNB), 137 (Polygon), 42161 (Arbitrum), 10 (Optimism)` 
       });
     }
 

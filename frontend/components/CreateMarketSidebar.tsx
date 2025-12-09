@@ -299,7 +299,13 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
         // Only update if chain actually changed
         if (prev.chainId !== chainId) {
           const allChainTokens = getTokensForChain(chainId);
-          const stablecoins = allChainTokens.filter(token => token.symbol === 'USDC' || token.symbol === 'USDT');
+          const stablecoins = allChainTokens.filter(token => 
+            token.symbol === 'USDC' || 
+            token.symbol === 'USDT' || 
+            token.symbol === 'PYUSD' || 
+            token.symbol === 'USDe' ||
+            token.symbol === 'WETH'
+          );
           const defaultToken = stablecoins.find(t => t.symbol === prev.tokenSymbol)?.symbol || stablecoins[0]?.symbol || 'USDC';
           
           return {
@@ -313,9 +319,15 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
     }
   }, [chainId]);
 
-  // Get available tokens for selected chain - filter to only stablecoins (USDC, USDT)
+  // Get available tokens for selected chain - filter to stablecoins and ETH (USDC, USDT, PYUSD, USDe, WETH)
   const allTokens = getTokensForChain(formData.chainId);
-  const availableTokens = allTokens.filter(token => token.symbol === 'USDC' || token.symbol === 'USDT');
+  const availableTokens = allTokens.filter(token => 
+    token.symbol === 'USDC' || 
+    token.symbol === 'USDT' || 
+    token.symbol === 'PYUSD' || 
+    token.symbol === 'USDe' ||
+    token.symbol === 'WETH'
+  );
   const selectedToken = getToken(formData.tokenSymbol, formData.chainId);
   const selectedChain = getChainConfig(formData.chainId);
   const chainIdNum = typeof formData.chainId === 'number' 
@@ -842,7 +854,13 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
     setSelectedPreferredWallet(wallet);
     const chainIdNum = typeof wallet.chain_id === 'string' ? parseInt(wallet.chain_id) : wallet.chain_id;
     const allChainTokens = getTokensForChain(chainIdNum);
-    const stablecoins = allChainTokens.filter(token => token.symbol === 'USDC' || token.symbol === 'USDT');
+    const stablecoins = allChainTokens.filter(token => 
+      token.symbol === 'USDC' || 
+      token.symbol === 'USDT' || 
+      token.symbol === 'PYUSD' || 
+      token.symbol === 'USDe' ||
+      token.symbol === 'WETH'
+    );
     const defaultToken = stablecoins.find(t => t.symbol === formData.tokenSymbol)?.symbol || stablecoins[0]?.symbol || 'USDC';
     
     // Update form data with chain from selected wallet
@@ -1198,7 +1216,7 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
                 >
                   {availableTokens.map(token => (
                     <option key={token.symbol} value={token.symbol}>
-                      {token.symbol}
+                      {token.symbol === 'WETH' ? 'ETH' : token.symbol}
                     </option>
                   ))}
                 </select>
@@ -1347,12 +1365,6 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
                   const chainConfig = getChainConfig(chainIdNum);
                   const isSelected = selectedPreferredWallet?.id === wallet.id;
                   
-                  // Truncate wallet address: show first 6 and last 4 characters
-                  const truncateAddress = (address: string) => {
-                    if (address.length <= 10) return address;
-                    return `${address.slice(0, 6)}...${address.slice(-4)}`;
-                  };
-                  
                   return (
                     <button
                       key={wallet.id}
@@ -1366,13 +1378,8 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex-1 min-w-0 text-left">
-                          <div className="font-semibold text-sm mb-0.5">
+                          <div className="font-semibold text-sm">
                             {chainConfig?.name || `Chain ${wallet.chain_id}`}
-                          </div>
-                          <div className={`text-xs font-mono ${
-                            isSelected ? 'text-gray-300' : 'text-gray-500'
-                          }`}>
-                            {truncateAddress(wallet.receiving_wallet_address)}
                           </div>
                         </div>
                         {isSelected && (

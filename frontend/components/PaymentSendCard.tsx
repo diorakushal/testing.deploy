@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { getChainConfig } from '@/lib/tokenConfig';
 
 interface PaymentSendCardProps {
@@ -43,6 +44,8 @@ interface PaymentSendCardProps {
 }
 
 export default function PaymentSendCard({ send, userAddress, userId, contacts = [] }: PaymentSendCardProps) {
+  const router = useRouter();
+
   const formatAmount = (amount: string | number) => {
     const num = typeof amount === 'string' ? parseFloat(amount) : amount;
     if (num < 0.0001) {
@@ -81,6 +84,43 @@ export default function PaymentSendCard({ send, userAddress, userId, contacts = 
       return [firstName, lastName].filter(Boolean).join(' ');
     }
     return fallback || '';
+  };
+
+  const handleUserClick = (targetUserId?: string | null, targetUsername?: string | null, targetFirstName?: string | null, targetLastName?: string | null, targetEmail?: string | null) => {
+    if (!targetUsername) return;
+    
+    router.push(`/user/${targetUsername}`);
+  };
+
+  const renderUserName = (userId?: string | null, username?: string | null, firstName?: string | null, lastName?: string | null, fallback?: string | null) => {
+    const name = formatName(userId, username, firstName, lastName, fallback);
+    
+    // If it's a username (starts with @) and we have a userId, make it clickable
+    if (name.startsWith('@') && userId) {
+      return (
+        <button
+          onClick={() => handleUserClick(userId, username, firstName, lastName)}
+          className="text-sm text-gray-900 hover:text-black hover:underline font-medium"
+        >
+          {name}
+        </button>
+      );
+    }
+    
+    // If it's a nickname from contacts and we have userId, make it clickable
+    if (userId && contactsMap.has(userId)) {
+      return (
+        <button
+          onClick={() => handleUserClick(userId, username, firstName, lastName)}
+          className="text-sm text-gray-900 hover:text-black hover:underline font-medium"
+        >
+          {name}
+        </button>
+      );
+    }
+    
+    // Otherwise, return as plain text
+    return <span>{name}</span>;
   };
 
   const formatTimeAgo = (dateString: string) => {
@@ -138,15 +178,15 @@ export default function PaymentSendCard({ send, userAddress, userId, contacts = 
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               {isSentByMe ? (
                 <span className="text-sm text-gray-900">
-                  You paid {formatName(send.recipient_user_id, send.recipient_username, send.recipient_first_name, send.recipient_last_name) || formatAddress(send.recipient_address)} <span className="text-xs text-gray-500">on {send.chain_name}</span>
+                  You paid {send.recipient_user_id ? renderUserName(send.recipient_user_id, send.recipient_username, send.recipient_first_name, send.recipient_last_name) : formatAddress(send.recipient_address)} <span className="text-xs text-gray-500">on {send.chain_name}</span>
                 </span>
               ) : isReceivedByMe ? (
                 <span className="text-sm text-gray-900">
-                  {formatName(send.sender_user_id, send.sender_username, send.sender_first_name, send.sender_last_name) || formatAddress(send.sender_address)} paid you <span className="text-xs text-gray-500">on {send.chain_name}</span>
+                  {send.sender_user_id ? renderUserName(send.sender_user_id, send.sender_username, send.sender_first_name, send.sender_last_name) : formatAddress(send.sender_address)} paid you <span className="text-xs text-gray-500">on {send.chain_name}</span>
                 </span>
               ) : (
                 <span className="text-sm text-gray-900">
-                  {formatName(send.sender_user_id, send.sender_username, send.sender_first_name, send.sender_last_name) || formatAddress(send.sender_address)} paid {formatName(send.recipient_user_id, send.recipient_username, send.recipient_first_name, send.recipient_last_name) || formatAddress(send.recipient_address)} <span className="text-xs text-gray-500">on {send.chain_name}</span>
+                  {send.sender_user_id ? renderUserName(send.sender_user_id, send.sender_username, send.sender_first_name, send.sender_last_name) : formatAddress(send.sender_address)} paid {send.recipient_user_id ? renderUserName(send.recipient_user_id, send.recipient_username, send.recipient_first_name, send.recipient_last_name) : formatAddress(send.recipient_address)} <span className="text-xs text-gray-500">on {send.chain_name}</span>
                 </span>
               )}
             </div>

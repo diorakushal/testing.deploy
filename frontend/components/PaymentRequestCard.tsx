@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import { formatUnits, parseUnits, Address, isAddress } from 'viem';
@@ -79,6 +80,8 @@ interface PaymentRequestCardProps {
 }
 
 export default function PaymentRequestCard({ request, userAddress, userId, contacts = [], onPaymentSuccess }: PaymentRequestCardProps) {
+  const router = useRouter();
+
   console.log('[PaymentRequestCard] 🎨 Component render', {
     requestId: request.id,
     requestStatus: request.status,
@@ -192,6 +195,43 @@ export default function PaymentRequestCard({ request, userAddress, userId, conta
       return [firstName, lastName].filter(Boolean).join(' ');
     }
     return fallback || '';
+  };
+
+  const handleUserClick = (targetUserId?: string | null, targetUsername?: string | null, targetFirstName?: string | null, targetLastName?: string | null, targetEmail?: string | null) => {
+    if (!targetUsername) return;
+    
+    router.push(`/user/${targetUsername}`);
+  };
+
+  const renderUserName = (userId?: string | null, username?: string | null, firstName?: string | null, lastName?: string | null, fallback?: string | null) => {
+    const name = formatName(userId, username, firstName, lastName, fallback);
+    
+    // If it's a username (starts with @) and we have a userId, make it clickable
+    if (name.startsWith('@') && userId) {
+      return (
+        <button
+          onClick={() => handleUserClick(userId, username, firstName, lastName)}
+          className="text-sm text-gray-900 hover:text-black hover:underline font-medium"
+        >
+          {name}
+        </button>
+      );
+    }
+    
+    // If it's a nickname from contacts and we have userId, make it clickable
+    if (userId && contactsMap.has(userId)) {
+      return (
+        <button
+          onClick={() => handleUserClick(userId, username, firstName, lastName)}
+          className="text-sm text-gray-900 hover:text-black hover:underline font-medium"
+        >
+          {name}
+        </button>
+      );
+    }
+    
+    // Otherwise, return as plain text
+    return <span>{name}</span>;
   };
 
   const formatTimeAgo = (dateString: string) => {
@@ -687,20 +727,20 @@ export default function PaymentRequestCard({ request, userAddress, userId, conta
               {isOwnRequest ? (
                 <span className="text-sm text-gray-900">
                   {request.recipient_user_id ? (
-                    <>You requested from {formatName(request.recipient_user_id, request.recipient_username, request.recipient_first_name, request.recipient_last_name) || 'user'} <span className="text-xs text-gray-500">on {request.chain_name}</span></>
+                    <>You requested from {renderUserName(request.recipient_user_id, request.recipient_username, request.recipient_first_name, request.recipient_last_name) || 'user'} <span className="text-xs text-gray-500">on {request.chain_name}</span></>
                   ) : isPaid && request.paid_by_user_id ? (
-                    <>You requested from {formatName(request.paid_by_user_id, request.paid_by_username, request.paid_by_first_name, request.paid_by_last_name) || formatAddress(request.paid_by)} <span className="text-xs text-gray-500">on {request.chain_name}</span></>
+                    <>You requested from {renderUserName(request.paid_by_user_id, request.paid_by_username, request.paid_by_first_name, request.paid_by_last_name) || (request.paid_by ? formatAddress(request.paid_by) : 'user')} <span className="text-xs text-gray-500">on {request.chain_name}</span></>
                   ) : (
                     <>You requested payment <span className="text-xs text-gray-500">on {request.chain_name}</span></>
                   )}
                 </span>
               ) : isRequestedFromMe ? (
                 <span className="text-sm text-gray-900">
-                  {formatName(request.requester_user_id, request.requester_username, request.requester_first_name, request.requester_last_name) || formatAddress(request.requester_address)} requested from you <span className="text-xs text-gray-500">on {request.chain_name}</span>
+                  {request.requester_user_id ? renderUserName(request.requester_user_id, request.requester_username, request.requester_first_name, request.requester_last_name) : (request.requester_address ? formatAddress(request.requester_address) : 'user')} requested from you <span className="text-xs text-gray-500">on {request.chain_name}</span>
                 </span>
               ) : (
                 <span className="text-sm text-gray-900">
-                  {formatName(request.requester_user_id, request.requester_username, request.requester_first_name, request.requester_last_name) || formatAddress(request.requester_address)} requested payment <span className="text-xs text-gray-500">on {request.chain_name}</span>
+                  {request.requester_user_id ? renderUserName(request.requester_user_id, request.requester_username, request.requester_first_name, request.requester_last_name) : (request.requester_address ? formatAddress(request.requester_address) : 'user')} requested payment <span className="text-xs text-gray-500">on {request.chain_name}</span>
                 </span>
               )}
             </div>

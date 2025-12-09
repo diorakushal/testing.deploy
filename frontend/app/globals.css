@@ -13,8 +13,8 @@ body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
-/* Cash Sans style font - Primary font for Zemme branding (similar to Cash App) */
-.font-zemme {
+/* Cash Sans style font - Primary font for Blockbook branding (similar to Cash App) */
+.font-blockbook {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
   font-weight: 700;
   letter-spacing: -0.03em;

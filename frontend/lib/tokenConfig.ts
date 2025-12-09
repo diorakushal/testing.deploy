@@ -157,6 +157,13 @@ export const TOKENS: TokenConfig[] = [
     decimals: 18,
     chainId: 8453
   },
+  {
+    symbol: 'USDe',
+    name: 'Ethena USDe',
+    address: '0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34',
+    decimals: 18,
+    chainId: 8453
+  },
   // Ethereum Mainnet
   {
     symbol: 'USDC',
@@ -242,6 +249,20 @@ export const TOKENS: TokenConfig[] = [
     decimals: 8,
     chainId: 1
   },
+  {
+    symbol: 'USDe',
+    name: 'Ethena USDe',
+    address: '0x4c9EDD5852cd905f086C759E8383e09bff1E68B3',
+    decimals: 18,
+    chainId: 1
+  },
+  {
+    symbol: 'PYUSD',
+    name: 'PayPal USD',
+    address: '0x6c3ea9036406852006290770BEdFcAbA0e23A0e8',
+    decimals: 6,
+    chainId: 1
+  },
   // BNB Chain
   {
     symbol: 'USDC',
@@ -306,6 +327,13 @@ export const TOKENS: TokenConfig[] = [
     decimals: 8,
     chainId: 56
   },
+  {
+    symbol: 'USDe',
+    name: 'Ethena USDe',
+    address: '0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34',
+    decimals: 18,
+    chainId: 56
+  },
   // Arbitrum
   {
     symbol: 'USDC',
@@ -318,6 +346,20 @@ export const TOKENS: TokenConfig[] = [
     symbol: 'USDT',
     name: 'Tether USD',
     address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9',
+    decimals: 6,
+    chainId: 42161
+  },
+  {
+    symbol: 'USDe',
+    name: 'Ethena USDe',
+    address: '0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34',
+    decimals: 18,
+    chainId: 42161
+  },
+  {
+    symbol: 'PYUSD',
+    name: 'PayPal USD',
+    address: '0x46850ad61c2b7d64d08c9c754F45254596696984',
     decimals: 6,
     chainId: 42161
   },
@@ -366,6 +408,13 @@ export const TOKENS: TokenConfig[] = [
     decimals: 6,
     chainId: 43114
   },
+  {
+    symbol: 'USDe',
+    name: 'Ethena USDe',
+    address: '0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34',
+    decimals: 18,
+    chainId: 43114
+  },
   // Tron (TRC20 tokens)
   {
     symbol: 'USDC',
@@ -403,6 +452,8 @@ export const AVAILABLE_CHAINS = [
   { id: 8453, name: 'Base' },
   { id: 1, name: 'Ethereum' },
   { id: 56, name: 'BNB Chain' },
-  { id: 137, name: 'Polygon' }
+  { id: 137, name: 'Polygon' },
+  { id: 42161, name: 'Arbitrum' },
+  { id: 10, name: 'Optimism' }
 ];
 

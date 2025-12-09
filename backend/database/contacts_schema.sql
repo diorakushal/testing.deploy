@@ -37,3 +37,4 @@ CREATE TRIGGER trigger_update_contacts_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_contacts_updated_at();
 
+

@@ -16,7 +16,7 @@ export default function HowItWorksModal({ isOpen, onClose }: HowItWorksModalProp
       >
         {/* Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-black">How Zemme Works</h2>
+          <h2 className="text-2xl font-bold text-black">How Blockbook Works</h2>
           <button
             onClick={onClose}
             className="text-gray-600 hover:text-gray-800 transition-colors"
@@ -35,7 +35,7 @@ export default function HowItWorksModal({ isOpen, onClose }: HowItWorksModalProp
               1
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-black tracking-tight mb-1.5">The requester generates a Zemme link</h3>
+              <h3 className="text-lg font-semibold text-black tracking-tight mb-1.5">The requester generates a Blockbook link</h3>
               <p className="text-gray-600 mb-2">
                 They choose:
               </p>
@@ -46,7 +46,7 @@ export default function HowItWorksModal({ isOpen, onClose }: HowItWorksModalProp
                 <li>Their receiving wallet</li>
               </ul>
               <p className="text-gray-600 mt-2">
-                Zemme produces a shareable link.
+                Blockbook produces a shareable link.
               </p>
             </div>
           </div>
@@ -59,7 +59,7 @@ export default function HowItWorksModal({ isOpen, onClose }: HowItWorksModalProp
             <div>
               <h3 className="text-lg font-semibold text-black tracking-tight mb-1.5">The payer clicks the link</h3>
               <p className="text-gray-600 mb-2">
-                Your Zemme popup:
+                Your Blockbook popup:
               </p>
               <ul className="text-gray-600 space-y-1 ml-4 list-disc">
                 <li>Opens automatically</li>

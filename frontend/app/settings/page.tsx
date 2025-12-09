@@ -56,6 +56,7 @@ export default function SettingsPage() {
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [editingNickname, setEditingNickname] = useState('');
   
+  
   useEffect(() => {
     currentChainIdRef.current = currentChainId;
   }, [currentChainId]);
@@ -874,15 +875,6 @@ export default function SettingsPage() {
                       </tbody>
                     </table>
                   </div>
-
-                  {!isConnected && (
-                    <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <p className="text-sm text-yellow-800">
-                        <strong>Connect your wallet</strong> to add receiving addresses for each chain. 
-                        Click "Connect Wallet" and your wallet extension will prompt you to connect.
-                      </p>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -890,7 +882,7 @@ export default function SettingsPage() {
               {activeTab === 'contacts' && (
                 <div className="space-y-6">
                   <p className="text-sm text-gray-600">
-                    Add other Zemme users as contacts. They'll appear first when you search to pay or request payments. 
+                    Add other Blockbook users as contacts. They'll appear first when you search to pay or request payments. 
                     You can also add nicknames to help you remember who they are.
                   </p>
 
@@ -925,7 +917,12 @@ export default function SettingsPage() {
                             {searchResults.map((userResult) => (
                               <button
                                 key={userResult.id}
-                                onClick={() => handleAddContact(userResult.id)}
+                                onClick={() => {
+                                  if (userResult.username) {
+                                    router.push(`/user/${userResult.username}`);
+                                    setShowSearchResults(false);
+                                  }
+                                }}
                                 className="w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center gap-3 border-b border-gray-100 last:border-b-0"
                                 disabled={loading}
                               >
@@ -970,6 +967,14 @@ export default function SettingsPage() {
                       {contacts.map((contact, index) => (
                         <div key={contact.id} className={`flex items-center gap-4 ${index < contacts.length - 1 ? 'border-b border-gray-200 pb-6 mb-6' : ''}`}>
                           {contact.user ? (
+                            <div 
+                              className="cursor-pointer"
+                              onClick={() => {
+                                if (contact.user?.username) {
+                                  router.push(`/user/${contact.user.username}`);
+                                }
+                              }}
+                            >
                             <UserAvatar
                               userId={contact.user.id}
                               firstName={contact.user.first_name}
@@ -979,12 +984,20 @@ export default function SettingsPage() {
                               profileImageUrl={contact.user.profile_image_url}
                               size="lg"
                             />
+                            </div>
                           ) : (
                             <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-base font-medium text-gray-700 flex-shrink-0">
                               ?
                             </div>
                           )}
-                          <div className="flex-1 min-w-0">
+                          <div 
+                            className="flex-1 min-w-0 cursor-pointer"
+                            onClick={() => {
+                              if (contact.user?.username) {
+                                router.push(`/user/${contact.user.username}`);
+                              }
+                            }}
+                          >
                             {editingContactId === contact.id ? (
                               <div className="flex items-center gap-2 flex-1">
                                 <input
@@ -1073,13 +1086,6 @@ export default function SettingsPage() {
                               >
                                 Request
                               </button>
-                              <button
-                                onClick={() => handleDeleteContact(contact.id)}
-                                disabled={loading}
-                                className="px-3 py-1.5 text-sm text-red-600 border border-red-600 rounded-full hover:bg-red-50 font-medium transition-colors disabled:opacity-50"
-                              >
-                                Remove
-                              </button>
                             </div>
                           )}
                         </div>
@@ -1095,7 +1101,7 @@ export default function SettingsPage() {
                   <section>
                     <h3 className="text-lg font-bold text-black mb-3">Overview</h3>
                     <p className="text-gray-700 leading-relaxed text-sm">
-                      Zemme is a non-custodial cryptocurrency payment platform that enables seamless wallet-to-wallet transactions. 
+                      Blockbook is a non-custodial cryptocurrency payment platform that enables seamless wallet-to-wallet transactions. 
                       Create payment requests, send direct payments, and manage your crypto payments across multiple blockchain networks.
                     </p>
                   </section>
@@ -1265,15 +1271,15 @@ export default function SettingsPage() {
 
                   <section>
                     <p className="text-gray-700 leading-relaxed text-sm">
-                      Welcome to Zemme. These Terms of Use ("Terms") govern your access to and use of the Zemme platform 
-                      ("Platform", "Service", "we", "us", or "our"). By using Zemme, you agree to be bound by these Terms.
+                      Welcome to Blockbook. These Terms of Use ("Terms") govern your access to and use of the Blockbook platform 
+                      ("Platform", "Service", "we", "us", or "our"). By using Blockbook, you agree to be bound by these Terms.
                     </p>
                   </section>
 
                   <section>
                     <h3 className="text-sm font-bold text-black mb-2">1. Acceptance of Terms</h3>
                     <p className="text-gray-700 leading-relaxed text-sm">
-                      By accessing or using Zemme, you acknowledge that you have read, understood, and agree to be bound by 
+                      By accessing or using Blockbook, you acknowledge that you have read, understood, and agree to be bound by 
                       these Terms and our Privacy Policy. If you do not agree to these Terms, you may not use the Service.
                     </p>
                   </section>
@@ -1281,7 +1287,7 @@ export default function SettingsPage() {
                   <section>
                     <h3 className="text-sm font-bold text-black mb-2">2. Description of Service</h3>
                     <p className="text-gray-700 leading-relaxed text-sm mb-1">
-                      Zemme is a non-custodial cryptocurrency payment platform that enables:
+                      Blockbook is a non-custodial cryptocurrency payment platform that enables:
                     </p>
                     <ul className="list-disc list-inside text-gray-700 text-sm space-y-0.5 ml-4">
                       <li>Creating and managing payment requests</li>
@@ -1290,7 +1296,7 @@ export default function SettingsPage() {
                       <li>Interacting with multiple blockchain networks</li>
                     </ul>
                     <p className="text-gray-700 leading-relaxed text-sm mt-2">
-                      Zemme does not hold, custody, or control your cryptocurrency. All transactions occur directly between 
+                      Blockbook does not hold, custody, or control your cryptocurrency. All transactions occur directly between 
                       user wallets through blockchain networks.
                     </p>
                   </section>
@@ -1299,7 +1305,7 @@ export default function SettingsPage() {
                     <h3 className="text-sm font-bold text-black mb-2">3. Eligibility</h3>
                     <p className="text-gray-700 leading-relaxed text-sm">
                       You must be at least 18 years old and have the legal capacity to enter into contracts in your jurisdiction. 
-                      You are responsible for ensuring that your use of Zemme complies with all applicable laws and regulations 
+                      You are responsible for ensuring that your use of Blockbook complies with all applicable laws and regulations 
                       in your jurisdiction.
                     </p>
                   </section>
@@ -1327,14 +1333,14 @@ export default function SettingsPage() {
                     <div className="space-y-1 text-gray-700 text-sm">
                       <p>
                         <strong>5.1 Wallet Security:</strong> You are solely responsible for the security of your connected 
-                        cryptocurrency wallet and private keys. Zemme never has access to your private keys or wallet funds.
+                        cryptocurrency wallet and private keys. Blockbook never has access to your private keys or wallet funds.
                       </p>
                       <p>
                         <strong>5.2 Network Fees:</strong> All blockchain network fees (gas fees) are your responsibility. 
-                        Zemme does not charge additional fees for transactions, but network fees apply to all on-chain operations.
+                        Blockbook does not charge additional fees for transactions, but network fees apply to all on-chain operations.
                       </p>
                       <p>
-                        <strong>5.3 Chain Switching:</strong> Zemme may automatically switch your wallet to the required 
+                        <strong>5.3 Chain Switching:</strong> Blockbook may automatically switch your wallet to the required 
                         blockchain network. You must approve all network switches and transactions in your wallet.
                       </p>
                     </div>
@@ -1356,7 +1362,7 @@ export default function SettingsPage() {
                         the blockchain. You are solely responsible for verifying recipient addresses and payment amounts.
                       </p>
                       <p>
-                        <strong>6.4 No Refunds:</strong> Zemme does not process refunds. All transactions are final once 
+                        <strong>6.4 No Refunds:</strong> Blockbook does not process refunds. All transactions are final once 
                         confirmed on the blockchain.
                       </p>
                     </div>
@@ -1365,7 +1371,7 @@ export default function SettingsPage() {
                   <section>
                     <h3 className="text-sm font-bold text-black mb-2">7. Prohibited Uses</h3>
                     <p className="text-gray-700 leading-relaxed text-sm mb-1">
-                      You agree not to use Zemme to:
+                      You agree not to use Blockbook to:
                     </p>
                     <ul className="list-disc list-inside text-gray-700 text-sm space-y-0.5 ml-4">
                       <li>Violate any applicable laws or regulations</li>
@@ -1373,14 +1379,14 @@ export default function SettingsPage() {
                       <li>Impersonate others or provide false information</li>
                       <li>Interfere with or disrupt the Service or servers</li>
                       <li>Attempt to gain unauthorized access to any part of the Service</li>
-                      <li>Use the Service for any purpose that could harm Zemme or its users</li>
+                      <li>Use the Service for any purpose that could harm Blockbook or its users</li>
                     </ul>
                   </section>
 
                   <section>
                     <h3 className="text-sm font-bold text-black mb-2">8. Smart Contracts</h3>
                     <p className="text-gray-700 leading-relaxed text-sm">
-                      Zemme uses smart contracts deployed on various blockchain networks. While we strive to use audited and 
+                      Blockbook uses smart contracts deployed on various blockchain networks. While we strive to use audited and 
                       secure contracts, smart contracts are experimental technology. You acknowledge the risks associated with 
                       smart contract interactions, including potential bugs, vulnerabilities, or failures.
                     </p>
@@ -1390,7 +1396,7 @@ export default function SettingsPage() {
                     <h3 className="text-sm font-bold text-black mb-2">9. Disclaimers</h3>
                     <div className="space-y-1 text-gray-700 text-sm">
                       <p>
-                        <strong>9.1 No Warranty:</strong> Zemme is provided "as is" and "as available" without warranties of 
+                        <strong>9.1 No Warranty:</strong> Blockbook is provided "as is" and "as available" without warranties of 
                         any kind, either express or implied.
                       </p>
                       <p>
@@ -1398,7 +1404,7 @@ export default function SettingsPage() {
                         including network congestion, high fees, and potential network failures.
                       </p>
                       <p>
-                        <strong>9.3 Third-Party Services:</strong> Zemme integrates with third-party wallet providers and 
+                        <strong>9.3 Third-Party Services:</strong> Blockbook integrates with third-party wallet providers and 
                         blockchain networks. We are not responsible for their services or any issues arising from their use.
                       </p>
                     </div>
@@ -1407,7 +1413,7 @@ export default function SettingsPage() {
                   <section>
                     <h3 className="text-sm font-bold text-black mb-2">10. Limitation of Liability</h3>
                     <p className="text-gray-700 leading-relaxed text-sm">
-                      To the maximum extent permitted by law, Zemme and its operators shall not be liable for any indirect, 
+                      To the maximum extent permitted by law, Blockbook and its operators shall not be liable for any indirect, 
                       incidental, special, consequential, or punitive damages, or any loss of profits or revenues, whether 
                       incurred directly or indirectly, or any loss of data, use, goodwill, or other intangible losses resulting 
                       from your use of the Service.
@@ -1417,7 +1423,7 @@ export default function SettingsPage() {
                   <section>
                     <h3 className="text-sm font-bold text-black mb-2">11. Indemnification</h3>
                     <p className="text-gray-700 leading-relaxed text-sm">
-                      You agree to indemnify, defend, and hold harmless Zemme and its operators from any claims, damages, 
+                      You agree to indemnify, defend, and hold harmless Blockbook and its operators from any claims, damages, 
                       losses, liabilities, and expenses (including legal fees) arising from your use of the Service, violation 
                       of these Terms, or infringement of any rights of another.
                     </p>
@@ -1427,7 +1433,7 @@ export default function SettingsPage() {
                     <h3 className="text-sm font-bold text-black mb-2">12. Modifications to Terms</h3>
                     <p className="text-gray-700 leading-relaxed text-sm">
                       We reserve the right to modify these Terms at any time. We will notify users of material changes via 
-                      email or through the Service. Your continued use of Zemme after changes become effective constitutes 
+                      email or through the Service. Your continued use of Blockbook after changes become effective constitutes 
                       acceptance of the modified Terms.
                     </p>
                   </section>
@@ -1435,7 +1441,7 @@ export default function SettingsPage() {
                   <section>
                     <h3 className="text-sm font-bold text-black mb-2">13. Termination</h3>
                     <p className="text-gray-700 leading-relaxed text-sm">
-                      We may suspend or terminate your access to Zemme at any time, with or without cause or notice, for any 
+                      We may suspend or terminate your access to Blockbook at any time, with or without cause or notice, for any 
                       reason including violation of these Terms. You may stop using the Service at any time.
                     </p>
                   </section>
@@ -1453,6 +1459,7 @@ export default function SettingsPage() {
           </div>
         </div>
       </main>
+
     </div>
   );
 }

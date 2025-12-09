@@ -24,3 +24,4 @@ CREATE INDEX IF NOT EXISTS idx_payment_requests_recipient_user_id
 ON public.payment_requests(recipient_user_id);
 
 
+

@@ -26,3 +26,4 @@ CREATE TABLE public.payment_requests (
 CREATE INDEX IF NOT EXISTS idx_payment_requests_requester_user_id ON public.payment_requests(requester_user_id);
 
 
+
