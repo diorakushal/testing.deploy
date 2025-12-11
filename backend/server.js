@@ -1,15 +1,73 @@
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
-const cron = require('node-cron');
-const { ethers } = require('ethers');
 const axios = require('axios');
 const https = require('https');
+const { body, query, param, validationResult } = require('express-validator');
 require('dotenv').config();
 
+// ========== ENVIRONMENT VARIABLE VALIDATION ==========
+const requiredEnvVars = [
+  'SUPABASE_URL',
+  'SUPABASE_ANON_KEY'
+];
+
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+if (missingVars.length > 0) {
+  console.error('❌ Missing required environment variables:');
+  missingVars.forEach(varName => console.error(`   - ${varName}`));
+  console.error('\nPlease set these in your .env file before starting the server.');
+  process.exit(1);
+}
+
+// Validate database connection - either DATABASE_URL or individual params
+if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) {
+  const dbRequiredVars = ['DB_USER', 'DB_HOST', 'DB_NAME', 'DB_PASSWORD'];
+  const missingDbVars = dbRequiredVars.filter(varName => !process.env[varName]);
+  if (missingDbVars.length > 0) {
+    console.error('❌ Missing database configuration:');
+    console.error('   Either set DATABASE_URL/POSTGRES_URL, or set all of:');
+    dbRequiredVars.forEach(varName => console.error(`   - ${varName}`));
+    process.exit(1);
+  }
+}
+
 const app = express();
-app.use(cors());
-app.use(express.json());
+
+// ========== CORS CONFIGURATION ==========
+// Configure CORS to only allow specific origins
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+  : [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://block-book.com',
+      'https://www.block-book.com',
+      process.env.FRONTEND_URL
+    ].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`⚠️  CORS blocked request from origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Request size limits
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // PostgreSQL connection (Supabase)
 // Support both connection string and individual parameters
@@ -34,11 +92,12 @@ if (process.env.DATABASE_URL || process.env.POSTGRES_URL) {
   };
 } else {
   // Use individual parameters - try direct connection first (port 5432)
+  // All parameters are required - validation already checked above
   poolConfig = {
-    user: process.env.DB_USER || 'postgres',
-    host: process.env.DB_HOST || 'db.robjixmkmrmryrqzivdd.supabase.co',
-    database: process.env.DB_NAME || 'postgres',
-    password: process.env.DB_PASSWORD || 'Kushal@13',
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    password: process.env.DB_PASSWORD,
     port: parseInt(process.env.DB_PORT || '5432'),
     ssl: {
       rejectUnauthorized: false // Required for Supabase
@@ -52,13 +111,109 @@ if (process.env.DATABASE_URL || process.env.POSTGRES_URL) {
 
 const pool = new Pool(poolConfig);
 
-// Web3 provider
-const provider = new ethers.JsonRpcProvider(
-  process.env.POLYGON_RPC_URL || 'https://polygon-rpc.com'
-);
+// ========== AUTHENTICATION MIDDLEWARE ==========
+// Middleware to authenticate requests using Supabase JWT tokens
+const authenticateUser = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ 
+        error: 'Unauthorized',
+        message: 'Missing or invalid authorization header. Expected: Bearer <token>'
+      });
+    }
+    
+    const token = authHeader.replace('Bearer ', '');
+    const { supabase } = require('./lib/supabase');
+    
+    // Verify the token and get user
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    
+    if (error || !user) {
+      return res.status(401).json({ 
+        error: 'Unauthorized',
+        message: 'Invalid or expired token'
+      });
+    }
+    
+    // Attach user to request object
+    req.user = user;
+    req.userId = user.id;
+    next();
+  } catch (error) {
+    console.error('Authentication error:', error);
+    return res.status(500).json({ 
+      error: 'Authentication failed',
+      message: 'An error occurred while verifying authentication'
+    });
+  }
+};
 
-const marketContractAddress = process.env.MARKET_CONTRACT_ADDRESS;
-const ABI = require('./contracts/KOI.json');
+// Optional authentication - doesn't fail if no token, but attaches user if present
+const optionalAuth = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.replace('Bearer ', '');
+      const { supabase } = require('./lib/supabase');
+      
+      const { data: { user }, error } = await supabase.auth.getUser(token);
+      
+      if (!error && user) {
+        req.user = user;
+        req.userId = user.id;
+      }
+    }
+    
+    next();
+  } catch (error) {
+    // Continue without auth if optional
+    next();
+  }
+};
+
+// ========== INPUT VALIDATION MIDDLEWARE ==========
+// Middleware to check validation results
+const validate = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ 
+      error: 'Validation failed',
+      details: errors.array()
+    });
+  }
+  next();
+};
+
+// ========== HEALTH CHECK ENDPOINT ==========
+app.get('/health', async (req, res) => {
+  try {
+    // Check database connection with timeout
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Database check timeout')), 3000)
+    );
+    
+    const dbCheck = pool.query('SELECT 1');
+    await Promise.race([dbCheck, timeoutPromise]);
+    
+    res.json({ 
+      status: 'healthy', 
+      timestamp: new Date().toISOString(),
+      database: 'connected'
+    });
+  } catch (error) {
+    // Return 200 but indicate degraded status if database check fails
+    // This allows Render's health check to pass even if DB is slow
+    res.status(200).json({ 
+      status: 'degraded', 
+      timestamp: new Date().toISOString(),
+      database: 'disconnected',
+      error: error.message 
+    });
+  }
+});
 
 // ========== API ROUTES ==========
 
@@ -76,109 +231,6 @@ const getQueryParam = (query, paramName, defaultValue = undefined) => {
   // Ensure it's a string before returning
   return typeof value === 'string' ? value : String(value);
 };
-
-// Get markets feed
-app.get('/api/markets', async (req, res) => {
-  try {
-    const sort = getQueryParam(req.query, 'sort', 'trending');
-    const category = getQueryParam(req.query, 'category');
-    const status = getQueryParam(req.query, 'status', 'active');
-    
-    let query = `
-      SELECT * FROM markets 
-      WHERE resolved = $1
-    `;
-    const params = [status === 'resolved'];
-    
-    if (category && typeof category === 'string') {
-      query += ' AND category = $2';
-      params.push(category);
-    }
-    
-    // Sorting
-    if (sort === 'trending') {
-      query += ' ORDER BY (total_agree_stakes + total_disagree_stakes) DESC, created_at DESC';
-    } else if (sort === 'new') {
-      query += ' ORDER BY created_at DESC';
-    }
-    
-    query += ' LIMIT 50';
-    
-    const result = await pool.query(query, params);
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Error fetching markets:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get single market
-app.get('/api/markets/:id', async (req, res) => {
-  try {
-    const result = await pool.query(
-      'SELECT * FROM markets WHERE id = $1',
-      [req.params.id]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Market not found' });
-    }
-    
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error('Error fetching market:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Create market
-app.post('/api/markets', async (req, res) => {
-  try {
-    const {
-      creatorAddress,
-      title,
-      description,
-      category,
-      agreeLabel,
-      disagreeLabel,
-      endsAt,
-      smartContractAddress,
-      tokenType
-    } = req.body;
-    
-    const result = await pool.query(
-      `INSERT INTO markets (
-        creator_address, title, description, category, agree_label, 
-        disagree_label, ends_at, smart_contract_address, token_type
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING *`,
-      [
-        creatorAddress,
-        title,
-        description,
-        category,
-        agreeLabel || 'Agree',
-        disagreeLabel || 'Disagree',
-        endsAt,
-        smartContractAddress,
-        tokenType || 'USDC'
-      ]
-    );
-    
-    // Update user stats
-    await pool.query(
-      `UPDATE users 
-       SET markets_created = markets_created + 1
-       WHERE wallet_address = $1`,
-      [creatorAddress]
-    );
-    
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error('Error creating market:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 // Get or create user
 app.post('/api/users', async (req, res) => {
@@ -404,519 +456,21 @@ app.get('/api/users/:address', async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
     
-    // Get user's markets
-    const marketsResult = await pool.query(
-      'SELECT * FROM markets WHERE creator_address = $1 ORDER BY created_at DESC',
-      [req.params.address]
-    );
-    
-    // Get user's stakes
-    const stakesResult = await pool.query(
-      `SELECT s.*, m.title, m.resolved, m.winner
-       FROM stakes s
-       JOIN markets m ON s.market_id = m.id
-       WHERE s.user_wallet = $1
-       ORDER BY s.created_at DESC`,
-      [req.params.address]
-    );
-    
-    res.json({
-      ...result.rows[0],
-      markets: marketsResult.rows,
-      stakes: stakesResult.rows
-    });
+    res.json(result.rows[0]);
   } catch (error) {
     console.error('Error fetching user:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Record stake
-app.post('/api/stakes', async (req, res) => {
-  try {
-    const {
-      marketId,
-      userWallet,
-      amount,
-      side,
-      txHash
-    } = req.body;
-    
-    const result = await pool.query(
-      `INSERT INTO stakes (market_id, user_wallet, amount, side, tx_hash)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [marketId, userWallet, amount, side, txHash]
-    );
-    
-    // Update market totals
-    if (side === 1) {
-      await pool.query(
-        'UPDATE markets SET total_agree_stakes = total_agree_stakes + $1 WHERE id = $2',
-        [amount, marketId]
-      );
-    } else {
-      await pool.query(
-        'UPDATE markets SET total_disagree_stakes = total_disagree_stakes + $1 WHERE id = $2',
-        [amount, marketId]
-      );
-    }
-    
-    // Update user total staked
-    await pool.query(
-      'UPDATE users SET total_staked = total_staked + $1 WHERE wallet_address = $2',
-      [amount, userWallet]
-    );
-    
-    res.json(result.rows[0]);
-  } catch (error) {
-    console.error('Error recording stake:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Cron job to resolve markets every minute
-cron.schedule('* * * * *', async () => {
-  try {
-    console.log('Checking for markets to resolve...');
-    
-    const now = new Date();
-    const result = await pool.query(
-      `SELECT * FROM markets 
-       WHERE resolved = FALSE AND ends_at <= $1`,
-      [now]
-    );
-    
-    for (const market of result.rows) {
-      await resolveMarket(market);
-    }
-  } catch (error) {
-    console.error('Error in resolution cron:', error);
-  }
-});
-
-// Resolve market function
-async function resolveMarket(market) {
-  try {
-    // Call smart contract to resolve
-    const contract = new ethers.Contract(market.smart_contract_address, ABI, provider);
-    
-    // Convert market ID to number
-    const marketId = parseInt(market.id) || 0;
-    
-    try {
-      await contract.resolveMarket(marketId);
-      console.log(`Market ${market.id} resolved`);
-    } catch (error) {
-      console.error(`Error resolving market ${market.id}:`, error);
-    }
-    
-    // Get resolution data from contract
-    const marketData = await contract.getMarket(marketId);
-    
-    // Update database
-    await pool.query(
-      `UPDATE markets 
-       SET winner = $1, resolved = TRUE,
-           total_agree_stakes = $2, total_disagree_stakes = $3
-       WHERE id = $4`,
-      [
-        Number(marketData.winner),
-        ethers.formatUnits(marketData.totalAgreeStakes, 6),
-        ethers.formatUnits(marketData.totalDisagreeStakes, 6),
-        market.id
-      ]
-    );
-    
-    // Distribute payouts in background
-    await distributePayouts(market.id);
-    
-  } catch (error) {
-    console.error(`Error in resolveMarket for ${market.id}:`, error);
-  }
-}
-
-// Distribute payouts
-async function distributePayouts(marketId) {
-  try {
-    const marketResult = await pool.query(
-      'SELECT * FROM markets WHERE id = $1',
-      [marketId]
-    );
-    
-    if (marketResult.rows.length === 0 || !marketResult.rows[0].resolved) {
-      return;
-    }
-    
-    const market = marketResult.rows[0];
-    
-    // Get all stakes for this market
-    const stakesResult = await pool.query(
-      'SELECT * FROM stakes WHERE market_id = $1',
-      [marketId]
-    );
-    
-    // Calculate payouts for winners
-    for (const stake of stakesResult.rows) {
-      if (stake.side === market.winner) {
-        // Calculate payout
-        const totalPool = market.winner === 1 
-          ? parseFloat(market.total_disagree_stakes) 
-          : parseFloat(market.total_agree_stakes);
-        
-        const winnerPool = market.winner === 1
-          ? parseFloat(market.total_agree_stakes)
-          : parseFloat(market.total_disagree_stakes);
-        
-        const rake = totalPool * 0.05; // 5% rake
-        const payoutPool = totalPool - rake;
-        const userPayout = (stake.amount * payoutPool) / winnerPool + stake.amount;
-        
-        // Update stake with payout
-        await pool.query(
-          'UPDATE stakes SET payout = $1 WHERE id = $2',
-          [userPayout, stake.id]
-        );
-        
-        // Update user earnings
-        await pool.query(
-          'UPDATE users SET total_earnings = total_earnings + $1, wins = wins + 1 WHERE wallet_address = $2',
-          [userPayout - stake.amount, stake.user_wallet]
-        );
-      } else {
-        // User lost
-        await pool.query(
-          'UPDATE users SET losses = losses + 1 WHERE wallet_address = $1',
-          [stake.user_wallet]
-        );
-      }
-    }
-    
-    console.log(`Payouts distributed for market ${marketId}`);
-  } catch (error) {
-    console.error('Error distributing payouts:', error);
-  }
-}
-
-// Get active markets count
-app.get('/api/stats', async (req, res) => {
-  try {
-    const activeResult = await pool.query(
-      'SELECT COUNT(*) FROM markets WHERE resolved = FALSE'
-    );
-    const totalResult = await pool.query(
-      'SELECT COUNT(*) FROM markets'
-    );
-    
-    res.json({
-      activeMarkets: activeResult.rows[0].count,
-      totalMarkets: totalResult.rows[0].count
-    });
-  } catch (error) {
-    console.error('Error fetching stats:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Seed mock data endpoint
-app.post('/api/seed-mock-data', async (req, res) => {
-  try {
-    const mockMarkets = [
-      {
-        creator_address: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
-        title: 'Drake > Kendrick Lamar',
-        description: 'Who has better overall catalog and flow? Drake with his commercial success or Kendrick with his lyrical mastery?',
-        category: 'music',
-        agree_label: 'Drake',
-        disagree_label: 'Kendrick',
-        total_agree_stakes: 125000.50,
-        total_disagree_stakes: 98750.25,
-        ends_at: new Date(Date.now() + 20 * 60 * 60 * 1000).toISOString(),
-        smart_contract_address: marketContractAddress || '0x0000000000000000000000000000000000000000',
-        token_type: 'USDC'
-      },
-      {
-        creator_address: '0x8ba1f109551bD432803012645Hac136c2C1c',
-        title: 'Tesla is the most innovative car company',
-        description: 'Does Tesla lead the industry in innovation, or are legacy automakers catching up?',
-        category: 'other',
-        agree_label: 'Tesla',
-        disagree_label: 'Legacy Auto',
-        total_agree_stakes: 245000.00,
-        total_disagree_stakes: 189250.75,
-        ends_at: new Date(Date.now() + 18 * 60 * 60 * 1000).toISOString(),
-        smart_contract_address: marketContractAddress || '0x0000000000000000000000000000000000000000',
-        token_type: 'USDC'
-      },
-      {
-        creator_address: '0x5c0d3b8a7d9e1F2f4a6B8d5e4c7a3B9d1E2f4a6',
-        title: 'Taylor Swift is the greatest pop artist of all time',
-        description: 'Her longevity, album sales, and cultural impact make her unmatched in pop music history.',
-        category: 'music',
-        agree_label: 'Swift',
-        disagree_label: 'Others',
-        total_agree_stakes: 87500.00,
-        total_disagree_stakes: 112500.50,
-        ends_at: new Date(Date.now() + 22 * 60 * 60 * 1000).toISOString(),
-        smart_contract_address: marketContractAddress || '0x0000000000000000000000000000000000000000',
-        token_type: 'USDC'
-      },
-      {
-        creator_address: '0x3a7b9c2d4e5f6a8b9c1d2e3f4a5b6c7d8e9f0a1b',
-        title: 'LeBron James > Michael Jordan',
-        description: 'The GOAT debate continues. LeBron vs MJ based on career achievements and dominance.',
-        category: 'sports',
-        agree_label: 'LeBron',
-        disagree_label: 'Jordan',
-        total_agree_stakes: 156250.25,
-        total_disagree_stakes: 231500.00,
-        ends_at: new Date(Date.now() + 16 * 60 * 60 * 1000).toISOString(),
-        smart_contract_address: marketContractAddress || '0x0000000000000000000000000000000000000000',
-        token_type: 'USDC'
-      },
-      {
-        creator_address: '0x9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0',
-        title: 'Tom Brady > Aaron Rodgers',
-        description: 'Who is the better quarterback? The GOAT with 7 rings or Rodgers with superior arm talent?',
-        category: 'sports',
-        agree_label: 'Brady',
-        disagree_label: 'Rodgers',
-        total_agree_stakes: 98750.50,
-        total_disagree_stakes: 134250.75,
-        ends_at: new Date(Date.now() + 14 * 60 * 60 * 1000).toISOString(),
-        smart_contract_address: marketContractAddress || '0x0000000000000000000000000000000000000000',
-        token_type: 'USDC'
-      },
-      {
-        creator_address: '0x2b4d6f8a9c1e3d5f7b9a2c4e6f8a1b3d5c7e9f2b',
-        title: 'The Sopranos > Breaking Bad',
-        description: 'Which TV series is the better crime drama masterpiece?',
-        category: 'pop-culture',
-        agree_label: 'The Sopranos',
-        disagree_label: 'Breaking Bad',
-        total_agree_stakes: 67890.00,
-        total_disagree_stakes: 85620.50,
-        ends_at: new Date(Date.now() + 19 * 60 * 60 * 1000).toISOString(),
-        smart_contract_address: marketContractAddress || '0x0000000000000000000000000000000000000000',
-        token_type: 'USDT'
-      }
-    ];
-
-    // Create mock users first
-    const userAddresses = [...new Set(mockMarkets.map(m => m.creator_address))];
-    
-    for (const address of userAddresses) {
-      await pool.query(
-        `INSERT INTO users (wallet_address, username, markets_created)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (wallet_address) DO NOTHING`,
-        [address, `user_${address.slice(0, 6)}`, 1]
-      );
-    }
-
-    // Insert mock markets
-    const createdMarkets = [];
-    for (const market of mockMarkets) {
-      const result = await pool.query(
-        `INSERT INTO markets (
-          creator_address, title, description, category, agree_label, 
-          disagree_label, ends_at, total_agree_stakes, total_disagree_stakes,
-          smart_contract_address, token_type
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-        RETURNING *`,
-        [
-          market.creator_address,
-          market.title,
-          market.description,
-          market.category,
-          market.agree_label,
-          market.disagree_label,
-          market.ends_at,
-          market.total_agree_stakes,
-          market.total_disagree_stakes,
-          market.smart_contract_address,
-          market.token_type
-        ]
-      );
-      createdMarkets.push(result.rows[0]);
-    }
-
-    res.json({ message: 'Mock data seeded successfully', markets: createdMarkets.length });
-  } catch (error) {
-    console.error('Error seeding mock data:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ========== PAYOUT API ENDPOINTS ==========
-
-// Get payout calculation for a market
-app.get('/api/markets/:marketId/payout', async (req, res) => {
-  try {
-    const { marketId } = req.params;
-
-    // Get market details
-    const marketResult = await pool.query(
-      'SELECT * FROM markets WHERE id = $1',
-      [marketId]
-    );
-
-    if (marketResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Market not found' });
-    }
-
-    const market = marketResult.rows[0];
-
-    if (!market.resolved) {
-      return res.status(400).json({ error: 'Market not resolved yet' });
-    }
-
-    const totalAgree = parseFloat(market.total_agree_stakes);
-    const totalDisagree = parseFloat(market.total_disagree_stakes);
-    
-    // Determine winner and calculate rake
-    const winner = market.winner;
-    const winnerPool = winner === 1 ? totalAgree : totalDisagree;
-    const rake = winnerPool * 0.05; // 5% rake
-    const winningPoolAfterRake = winnerPool - rake;
-
-    res.json({
-      marketId,
-      totalAgreeStakes: totalAgree,
-      totalDisagreeStakes: totalDisagree,
-      winner,
-      rake,
-      winningPoolAfterRake
-    });
-  } catch (error) {
-    console.error('Error calculating payout:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get user's specific payout for a market
-app.get('/api/markets/:marketId/user/:userAddress/payout', async (req, res) => {
-  try {
-    const { marketId, userAddress } = req.params;
-
-    // Get market details
-    const marketResult = await pool.query(
-      'SELECT * FROM markets WHERE id = $1',
-      [marketId]
-    );
-
-    if (marketResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Market not found' });
-    }
-
-    const market = marketResult.rows[0];
-
-    if (!market.resolved) {
-      return res.status(400).json({ error: 'Market not resolved yet' });
-    }
-
-    // Get user's stake
-    const stakeResult = await pool.query(
-      'SELECT * FROM stakes WHERE market_id = $1 AND user_wallet = $2',
-      [marketId, userAddress]
-    );
-
-    if (stakeResult.rows.length === 0) {
-      return res.status(404).json({ error: 'User has no stake in this market' });
-    }
-
-    const stake = stakeResult.rows[0];
-    
-    const winner = market.winner;
-    const won = stake.side === winner;
-
-    if (!won) {
-      return res.json({
-        userAddress,
-        stake: parseFloat(stake.amount),
-        side: stake.side,
-        won: false,
-        payout: 0,
-        profit: -parseFloat(stake.amount)
-      });
-    }
-
-    // Calculate payout
-    const totalAgree = parseFloat(market.total_agree_stakes);
-    const totalDisagree = parseFloat(market.total_disagree_stakes);
-    const winnerPool = winner === 1 ? totalAgree : totalDisagree;
-    const rake = winnerPool * 0.05;
-    const winningPoolAfterRake = winnerPool - rake;
-    const userStake = parseFloat(stake.amount);
-    
-    const payout = (userStake / winnerPool) * winningPoolAfterRake;
-    const profit = payout - userStake; // Will be negative due to rake
-
-    res.json({
-      userAddress,
-      stake: userStake,
-      side: stake.side,
-      won: true,
-      payout,
-      profit
-    });
-  } catch (error) {
-    console.error('Error calculating user payout:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get user's winning history
-app.get('/api/user/:userAddress/winnings', async (req, res) => {
-  try {
-    const { userAddress } = req.params;
-
-    const result = await pool.query(
-      `SELECT 
-        m.title,
-        s.side,
-        s.amount as stake,
-        s.payout,
-        m.winner,
-        s.claimed,
-        m.ends_at,
-        s.created_at
-      FROM stakes s
-      JOIN markets m ON s.market_id = m.id
-      WHERE s.user_wallet = $1 
-        AND m.resolved = true
-        AND s.side = m.winner
-      ORDER BY m.ends_at DESC`,
-      [userAddress]
-    );
-
-    res.json(result.rows);
-  } catch (error) {
-    console.error('Error fetching winnings:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Distribute winnings (called by anyone after market resolves)
-app.post('/api/markets/:marketId/distribute-winnings', async (req, res) => {
-  try {
-    const { marketId } = req.params;
-
-    // Call smart contract distributeWinnings function
-    // This will be implemented with ethers.js contract interaction
-    
-    res.json({ message: 'Winnings distribution triggered', marketId });
-  } catch (error) {
-    console.error('Error distributing winnings:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+// ========== PAYMENT REQUESTS API ENDPOINTS ==========
 
 // ========== PAYMENT REQUESTS API ENDPOINTS ==========
 
 // Seed endpoint removed - no mock data
 
-// Get all payment requests
-app.get('/api/payment-requests', async (req, res) => {
+// Get all payment requests (public, but can filter by authenticated user)
+app.get('/api/payment-requests', optionalAuth, async (req, res) => {
   try {
     // Validate and normalize query parameters to prevent array issues
     // Express may pass arrays if multiple query params with same name are provided
@@ -1228,12 +782,26 @@ app.get('/api/payment-requests/:id', async (req, res) => {
   }
 });
 
-// Create payment request
-app.post('/api/payment-requests', async (req, res) => {
+// Create payment request (requires authentication)
+app.post('/api/payment-requests', 
+  authenticateUser,
+  [
+    body('requesterAddress').notEmpty().withMessage('Requester address is required')
+      .matches(/^0x[a-fA-F0-9]{40}$/i).withMessage('Invalid wallet address format'),
+    body('amount').isFloat({ min: 0.000001 }).withMessage('Amount must be greater than 0'),
+    body('tokenAddress').notEmpty().withMessage('Token address is required')
+      .matches(/^0x[a-fA-F0-9]{40}$/i).withMessage('Invalid token address format'),
+    body('chainId').notEmpty().withMessage('Chain ID is required'),
+    body('chainName').notEmpty().withMessage('Chain name is required'),
+    body('tokenSymbol').optional().isString().trim(),
+    body('caption').optional().isString().trim().isLength({ max: 500 }).withMessage('Caption too long'),
+    body('recipientUserId').optional().isUUID().withMessage('Invalid recipient user ID format')
+  ],
+  validate,
+  async (req, res) => {
   try {
     const {
       requesterAddress,
-      requesterUserId, // Authenticated user ID from Supabase auth
       recipientUserId, // User ID of the recipient (if request is sent to specific user)
       amount,
       tokenSymbol = 'USDC',
@@ -1243,14 +811,11 @@ app.post('/api/payment-requests', async (req, res) => {
       caption
     } = req.body;
     
-    // Validate required fields
-    if (!requesterAddress || !amount || !tokenAddress || !chainId || !chainName) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
+    // Use authenticated user ID from token
+    const requesterUserId = req.userId;
     
-    if (parseFloat(amount) <= 0) {
-      return res.status(400).json({ error: 'Amount must be greater than 0' });
-    }
+    // Validate wallet address matches authenticated user (if they have one)
+    // Note: Users might not have wallet_address set yet, so we allow it
     
     // Use Supabase client instead of direct PostgreSQL for better reliability
     const { supabase } = require('./lib/supabase');
@@ -1294,8 +859,18 @@ app.post('/api/payment-requests', async (req, res) => {
   }
 });
 
-// Update payment request status (mark as paid)
-app.patch('/api/payment-requests/:id/paid', async (req, res) => {
+// Update payment request status (mark as paid) - requires authentication
+app.patch('/api/payment-requests/:id/paid',
+  authenticateUser,
+  [
+    param('id').isUUID().withMessage('Invalid payment request ID format'),
+    body('txHash').notEmpty().withMessage('Transaction hash is required')
+      .matches(/^0x[a-fA-F0-9]{64}$/i).withMessage('Invalid transaction hash format'),
+    body('paidBy').notEmpty().withMessage('Paid by address is required')
+      .matches(/^0x[a-fA-F0-9]{40}$/i).withMessage('Invalid wallet address format')
+  ],
+  validate,
+  async (req, res) => {
   try {
     const { txHash, paidBy } = req.body;
     const requestId = req.params.id;
@@ -1304,14 +879,10 @@ app.patch('/api/payment-requests/:id/paid', async (req, res) => {
       requestId,
       txHash,
       paidBy,
+      userId: req.userId,
       hasTxHash: !!txHash,
       hasPaidBy: !!paidBy
     });
-    
-    if (!txHash || !paidBy) {
-      console.error('[PaymentRequestAPI] ❌ Missing required fields', { txHash: !!txHash, paidBy: !!paidBy });
-      return res.status(400).json({ error: 'Missing txHash or paidBy' });
-    }
     
     // Use Supabase client for consistency and better error handling
     const { supabase } = require('./lib/supabase');
@@ -1514,24 +1085,24 @@ app.patch('/api/payment-requests/:id/paid', async (req, res) => {
   }
 });
 
-// Delete payment request (cancel)
-app.delete('/api/payment-requests/:id', async (req, res) => {
+// Delete payment request (cancel) - requires authentication
+app.delete('/api/payment-requests/:id',
+  authenticateUser,
+  [
+    param('id').isUUID().withMessage('Invalid payment request ID format')
+  ],
+  validate,
+  async (req, res) => {
   try {
-    const { requesterAddress } = req.body;
-    
-    if (!requesterAddress) {
-      return res.status(400).json({ error: 'Missing requesterAddress' });
-    }
-    
     // Use Supabase client instead of direct PostgreSQL
     const { supabase } = require('./lib/supabase');
     
-    // First, verify the request exists and belongs to the requester
+    // First, verify the request exists and belongs to the authenticated user
     const { data: existingRequest, error: fetchError } = await supabase
       .from('payment_requests')
       .select('*')
       .eq('id', req.params.id)
-      .eq('requester_address', requesterAddress)
+      .eq('requester_user_id', req.userId) // Verify ownership by user ID
       .eq('status', 'open')
       .single();
     
@@ -1544,7 +1115,7 @@ app.delete('/api/payment-requests/:id', async (req, res) => {
       .from('payment_requests')
       .delete()
       .eq('id', req.params.id)
-      .eq('requester_address', requesterAddress)
+      .eq('requester_user_id', req.userId) // Verify ownership by user ID
       .eq('status', 'open');
     
     if (error) {
@@ -1558,24 +1129,24 @@ app.delete('/api/payment-requests/:id', async (req, res) => {
   }
 });
 
-// Cancel endpoint (kept for backward compatibility, but now deletes)
-app.patch('/api/payment-requests/:id/cancel', async (req, res) => {
+// Cancel endpoint (kept for backward compatibility, but now deletes) - requires authentication
+app.patch('/api/payment-requests/:id/cancel',
+  authenticateUser,
+  [
+    param('id').isUUID().withMessage('Invalid payment request ID format')
+  ],
+  validate,
+  async (req, res) => {
   try {
-    const { requesterAddress } = req.body;
-    
-    if (!requesterAddress) {
-      return res.status(400).json({ error: 'Missing requesterAddress' });
-    }
-    
     // Use Supabase client instead of direct PostgreSQL
     const { supabase } = require('./lib/supabase');
     
-    // First, verify the request exists and belongs to the requester
+    // First, verify the request exists and belongs to the authenticated user
     const { data: existingRequest, error: fetchError } = await supabase
       .from('payment_requests')
       .select('*')
       .eq('id', req.params.id)
-      .eq('requester_address', requesterAddress)
+      .eq('requester_user_id', req.userId) // Verify ownership by user ID
       .eq('status', 'open')
       .single();
     
@@ -1588,7 +1159,7 @@ app.patch('/api/payment-requests/:id/cancel', async (req, res) => {
       .from('payment_requests')
       .delete()
       .eq('id', req.params.id)
-      .eq('requester_address', requesterAddress)
+      .eq('requester_user_id', req.userId) // Verify ownership by user ID
       .eq('status', 'open');
     
     if (error) {
@@ -1604,13 +1175,21 @@ app.patch('/api/payment-requests/:id/cancel', async (req, res) => {
 
 // ========== PREFERRED WALLETS ENDPOINTS ==========
 
-// Get preferred wallets for a user
-app.get('/api/preferred-wallets', async (req, res) => {
+// Get preferred wallets for a user (requires authentication)
+app.get('/api/preferred-wallets',
+  authenticateUser,
+  [
+    query('userId').optional().isUUID().withMessage('Invalid user ID format')
+  ],
+  validate,
+  async (req, res) => {
   try {
-    const { userId } = req.query;
+    // Use authenticated user's ID, or allow query param for admin access
+    const userId = req.query.userId || req.userId;
     
-    if (!userId) {
-      return res.status(400).json({ error: 'Missing userId' });
+    // Ensure users can only access their own wallets (unless admin)
+    if (userId !== req.userId) {
+      return res.status(403).json({ error: 'Forbidden: You can only access your own preferred wallets' });
     }
 
     const { supabase } = require('./lib/supabase');
@@ -1632,33 +1211,31 @@ app.get('/api/preferred-wallets', async (req, res) => {
   }
 });
 
-// Create or update preferred wallet
-app.post('/api/preferred-wallets', async (req, res) => {
+// Create or update preferred wallet (requires authentication)
+app.post('/api/preferred-wallets',
+  authenticateUser,
+  [
+    body('chainId').notEmpty().withMessage('Chain ID is required')
+      .isInt({ min: 1 }).withMessage('Chain ID must be a valid integer'),
+    body('receivingWalletAddress').notEmpty().withMessage('Receiving wallet address is required')
+      .matches(/^0x[a-fA-F0-9]{40}$/i).withMessage('Invalid wallet address format')
+  ],
+  validate,
+  async (req, res) => {
   try {
     console.log('[PreferredWalletsAPI] ========== NEW REQUEST ==========');
-    console.log('[PreferredWalletsAPI] Full request body:', JSON.stringify(req.body, null, 2));
     
-    const { userId, chainId, receivingWalletAddress } = req.body;
+    // Use authenticated user's ID
+    const userId = req.userId;
+    const { chainId, receivingWalletAddress } = req.body;
 
     console.log('[PreferredWalletsAPI] Request received:', {
-      userId: userId ? 'present' : 'missing',
+      userId,
       chainId,
       chainIdType: typeof chainId,
-      chainIdString: String(chainId),
-      chainIdLowercase: String(chainId).toLowerCase(),
       receivingWalletAddress: receivingWalletAddress ? `${receivingWalletAddress.substring(0, 10)}...` : 'missing',
-      addressLength: receivingWalletAddress?.length,
-      fullBody: JSON.stringify(req.body)
+      addressLength: receivingWalletAddress?.length
     });
-
-    if (!userId || !chainId || !receivingWalletAddress) {
-      console.error('[PreferredWalletsAPI] Missing required fields:', {
-        hasUserId: !!userId,
-        hasChainId: !!chainId,
-        hasAddress: !!receivingWalletAddress
-      });
-      return res.status(400).json({ error: 'Missing required fields: userId, chainId, receivingWalletAddress' });
-    }
 
     // Validate chain ID
     const chainIdNum = parseInt(String(chainId).trim(), 10);
@@ -1731,21 +1308,39 @@ app.post('/api/preferred-wallets', async (req, res) => {
   }
 });
 
-// Delete preferred wallet
-app.delete('/api/preferred-wallets/:id', async (req, res) => {
+// Delete preferred wallet (requires authentication)
+app.delete('/api/preferred-wallets/:id',
+  authenticateUser,
+  [
+    param('id').isUUID().withMessage('Invalid wallet ID format')
+  ],
+  validate,
+  async (req, res) => {
   try {
     const walletId = req.params.id;
 
-    if (!walletId) {
-      return res.status(400).json({ error: 'Missing wallet ID' });
-    }
-
     const { supabase } = require('./lib/supabase');
+    
+    // Verify the wallet belongs to the authenticated user
+    const { data: existingWallet, error: checkError } = await supabase
+      .from('preferred_wallets')
+      .select('user_id')
+      .eq('id', walletId)
+      .single();
+    
+    if (checkError || !existingWallet) {
+      return res.status(404).json({ error: 'Preferred wallet not found' });
+    }
+    
+    if (existingWallet.user_id !== req.userId) {
+      return res.status(403).json({ error: 'Forbidden: You can only delete your own preferred wallets' });
+    }
 
     const { error } = await supabase
       .from('preferred_wallets')
       .delete()
-      .eq('id', walletId);
+      .eq('id', walletId)
+      .eq('user_id', req.userId); // Double-check ownership
 
     if (error) {
       throw error;
@@ -1788,14 +1383,13 @@ app.get('/api/preferred-wallets/user/:userId', async (req, res) => {
 
 // ========== CONTACTS ENDPOINTS ==========
 
-// Get all contacts for a user
-app.get('/api/contacts', async (req, res) => {
+// Get all contacts for a user (requires authentication)
+app.get('/api/contacts',
+  authenticateUser,
+  async (req, res) => {
   try {
-    const { userId } = req.query;
-    
-    if (!userId) {
-      return res.status(400).json({ error: 'Missing userId' });
-    }
+    // Use authenticated user's ID
+    const userId = req.userId;
 
     const { supabase } = require('./lib/supabase');
 
@@ -2006,19 +1600,23 @@ app.post('/api/contacts', async (req, res) => {
   }
 });
 
-// Update contact (mainly for nickname)
-app.patch('/api/contacts/:id', async (req, res) => {
+// Update contact (mainly for nickname) - requires authentication
+app.patch('/api/contacts/:id',
+  authenticateUser,
+  [
+    param('id').isUUID().withMessage('Invalid contact ID format'),
+    body('nickname').optional().isString().trim().isLength({ max: 50 }).withMessage('Nickname too long')
+  ],
+  validate,
+  async (req, res) => {
   try {
     const { id } = req.params;
-    const { userId, nickname } = req.body;
-    
-    if (!userId) {
-      return res.status(400).json({ error: 'Missing userId' });
-    }
+    const { nickname } = req.body;
+    const userId = req.userId;
 
     const { supabase } = require('./lib/supabase');
 
-    // Verify the contact belongs to the user
+    // Verify the contact belongs to the authenticated user
     const { data: existing, error: checkError } = await supabase
       .from('contacts')
       .select('id, user_id')
@@ -2128,15 +1726,32 @@ app.delete('/api/contacts/:id', async (req, res) => {
 
 // ========== PAYMENT SENDS ENDPOINTS ==========
 
-// Create payment send (record of a direct payment)
-app.post('/api/payment-sends', async (req, res) => {
+// Create payment send (record of a direct payment) - requires authentication
+app.post('/api/payment-sends',
+  authenticateUser,
+  [
+    body('senderAddress').notEmpty().withMessage('Sender address is required')
+      .matches(/^0x[a-fA-F0-9]{40}$/i).withMessage('Invalid sender wallet address format'),
+    body('recipientAddress').notEmpty().withMessage('Recipient address is required')
+      .matches(/^0x[a-fA-F0-9]{40}$/i).withMessage('Invalid recipient wallet address format'),
+    body('amount').isFloat({ min: 0.000001 }).withMessage('Amount must be greater than 0'),
+    body('tokenAddress').notEmpty().withMessage('Token address is required')
+      .matches(/^0x[a-fA-F0-9]{40}$/i).withMessage('Invalid token address format'),
+    body('chainId').notEmpty().withMessage('Chain ID is required'),
+    body('chainName').notEmpty().withMessage('Chain name is required'),
+    body('txHash').notEmpty().withMessage('Transaction hash is required')
+      .matches(/^0x[a-fA-F0-9]{64}$/i).withMessage('Invalid transaction hash format'),
+    body('tokenSymbol').optional().isString().trim(),
+    body('caption').optional().isString().trim().isLength({ max: 500 }).withMessage('Caption too long'),
+    body('recipientUserId').optional().isUUID().withMessage('Invalid recipient user ID format')
+  ],
+  validate,
+  async (req, res) => {
   try {
     console.log('[PaymentSendsAPI] 📥 POST /api/payment-sends - Request received');
-    console.log('[PaymentSendsAPI] Request body:', JSON.stringify(req.body, null, 2));
     
     const {
       senderAddress,
-      senderUserId,
       recipientAddress,
       recipientUserId,
       amount,
@@ -2147,25 +1762,9 @@ app.post('/api/payment-sends', async (req, res) => {
       caption,
       txHash
     } = req.body;
-
-    // Validate required fields
-    const missingFields = [];
-    if (!senderAddress) missingFields.push('senderAddress');
-    if (!recipientAddress) missingFields.push('recipientAddress');
-    if (!amount) missingFields.push('amount');
-    if (!tokenAddress) missingFields.push('tokenAddress');
-    if (!chainId) missingFields.push('chainId');
-    if (!chainName) missingFields.push('chainName');
-    if (!txHash) missingFields.push('txHash');
-
-    if (missingFields.length > 0) {
-      console.error('[PaymentSendsAPI] ❌ Missing required fields:', missingFields);
-      return res.status(400).json({ error: `Missing required fields: ${missingFields.join(', ')}` });
-    }
-
-    if (parseFloat(amount) <= 0) {
-      return res.status(400).json({ error: 'Amount must be greater than 0' });
-    }
+    
+    // Use authenticated user's ID
+    const senderUserId = req.userId;
 
     const { supabase } = require('./lib/supabase');
 
@@ -2217,10 +1816,21 @@ app.post('/api/payment-sends', async (req, res) => {
   }
 });
 
-// Get payment sends
-app.get('/api/payment-sends', async (req, res) => {
+// Get payment sends (requires authentication - users can only see their own)
+app.get('/api/payment-sends',
+  authenticateUser,
+  [
+    query('sender_user_id').optional().isUUID().withMessage('Invalid sender user ID format'),
+    query('recipient_user_id').optional().isUUID().withMessage('Invalid recipient user ID format'),
+    query('status').optional().isIn(['pending', 'confirmed', 'failed']).withMessage('Invalid status'),
+    query('txHash').optional().matches(/^0x[a-fA-F0-9]{64}$/i).withMessage('Invalid transaction hash format')
+  ],
+  validate,
+  async (req, res) => {
   try {
-    const { sender_user_id, recipient_user_id, sender_address, recipient_address, status, txHash } = req.query;
+    // Users can only query their own payment sends
+    const sender_user_id = req.userId; // Force to authenticated user
+    const { recipient_user_id, status, txHash } = req.query;
 
     console.log('[PaymentSendsAPI] Fetching payment sends', { sender_user_id, recipient_user_id, sender_address, recipient_address, status, txHash });
 
@@ -2381,17 +1991,34 @@ app.get('/api/payment-sends', async (req, res) => {
   }
 });
 
-// Update payment send status (mark as confirmed)
-app.patch('/api/payment-sends/:id/confirmed', async (req, res) => {
+// Update payment send status (mark as confirmed) - requires authentication
+app.patch('/api/payment-sends/:id/confirmed',
+  authenticateUser,
+  [
+    param('id').isUUID().withMessage('Invalid payment send ID format'),
+    body('txHash').optional().matches(/^0x[a-fA-F0-9]{64}$/i).withMessage('Invalid transaction hash format')
+  ],
+  validate,
+  async (req, res) => {
   try {
     const { id } = req.params;
     const { txHash } = req.body;
-
-    if (!id) {
-      return res.status(400).json({ error: 'Missing payment send ID' });
-    }
-
+    
+    // Verify the payment send belongs to the authenticated user
     const { supabase } = require('./lib/supabase');
+    const { data: existingSend, error: checkError } = await supabase
+      .from('payment_sends')
+      .select('sender_user_id')
+      .eq('id', id)
+      .single();
+    
+    if (checkError || !existingSend) {
+      return res.status(404).json({ error: 'Payment send not found' });
+    }
+    
+    if (existingSend.sender_user_id !== req.userId) {
+      return res.status(403).json({ error: 'Forbidden: You can only update your own payment sends' });
+    }
 
     const updateData = {
       status: 'confirmed',
