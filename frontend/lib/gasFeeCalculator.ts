@@ -128,15 +128,15 @@ export async function calculateFinalGasFee(
     console.log('[GasFeeCalculator] Using fallback gas prices (skipping network call)');
     usingFallbackGas = true;
     if (chainId === 1) {
-      gasPrice = parseUnits('40', 'gwei'); // Ethereum: 40 gwei
+      gasPrice = parseUnits('40', 9); // Ethereum: 40 gwei
     } else if (chainId === 8453) {
-      gasPrice = parseUnits('0.1', 'gwei'); // Base: 0.1 gwei
+      gasPrice = parseUnits('0.1', 9); // Base: 0.1 gwei
     } else if (chainId === 56) {
-      gasPrice = parseUnits('3', 'gwei'); // BNB Chain: 3 gwei
+      gasPrice = parseUnits('3', 9); // BNB Chain: 3 gwei
     } else if (chainId === 137) {
-      gasPrice = parseUnits('30', 'gwei'); // Polygon: 30 gwei
+      gasPrice = parseUnits('30', 9); // Polygon: 30 gwei
     } else {
-      gasPrice = parseUnits('20', 'gwei'); // Default: 20 gwei
+      gasPrice = parseUnits('20', 9); // Default: 20 gwei
     }
     console.log('[GasFeeCalculator] Fallback gas price:', formatUnits(gasPrice, 'gwei'), 'gwei');
   } else {
@@ -154,15 +154,15 @@ export async function calculateFinalGasFee(
       usingFallbackGas = true;
       // Fallback: Use estimated gas prices based on chain
       if (chainId === 1) {
-        gasPrice = parseUnits('40', 'gwei');
+        gasPrice = parseUnits('40', 9);
       } else if (chainId === 8453) {
-        gasPrice = parseUnits('0.1', 'gwei');
+        gasPrice = parseUnits('0.1', 9);
       } else if (chainId === 56) {
-        gasPrice = parseUnits('3', 'gwei');
+        gasPrice = parseUnits('3', 9);
       } else if (chainId === 137) {
-        gasPrice = parseUnits('30', 'gwei');
+        gasPrice = parseUnits('30', 9);
       } else {
-        gasPrice = parseUnits('20', 'gwei');
+        gasPrice = parseUnits('20', 9);
       }
       console.warn('[GasFeeCalculator] Using fallback gas price:', formatUnits(gasPrice, 'gwei'), 'gwei');
     }
