@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import UserAvatar from '@/components/UserAvatar';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -16,8 +17,12 @@ export default function PublicProfilePage() {
   
   const [user, setUser] = useState<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [isContact, setIsContact] = useState(false);
+  const [checkingContact, setCheckingContact] = useState(false);
+  const [addingContact, setAddingContact] = useState(false);
 
   // Check if current user is logged in
   useEffect(() => {
@@ -26,6 +31,7 @@ export default function PublicProfilePage() {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           setCurrentUser(session.user);
+          setCurrentUserId(session.user.id);
         }
       } catch (error) {
         console.error('Error checking auth:', error);
@@ -40,8 +46,10 @@ export default function PublicProfilePage() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         setCurrentUser(session.user);
+        setCurrentUserId(session.user.id);
       } else {
         setCurrentUser(null);
+        setCurrentUserId(null);
       }
     });
 
@@ -49,6 +57,37 @@ export default function PublicProfilePage() {
       subscription.unsubscribe();
     };
   }, []);
+
+  // Check if current user already has this user as a contact
+  useEffect(() => {
+    const checkContact = async () => {
+      if (!currentUserId || !user?.id || currentUserId === user.id) {
+        setIsContact(false);
+        return;
+      }
+
+      try {
+        setCheckingContact(true);
+        const response = await axios.get(`${API_URL}/contacts`, {
+          params: { userId: currentUserId }
+        });
+
+        const contactExists = response.data.some(
+          (contact: any) => contact.contact_user_id === user.id
+        );
+        setIsContact(contactExists);
+      } catch (error) {
+        console.error('Error checking contact:', error);
+        setIsContact(false);
+      } finally {
+        setCheckingContact(false);
+      }
+    };
+
+    if (currentUserId && user?.id) {
+      checkContact();
+    }
+  }, [currentUserId, user?.id]);
 
   // Fetch user profile by username
   useEffect(() => {
@@ -99,12 +138,47 @@ export default function PublicProfilePage() {
     router.push(`/signup?redirect=${returnUrl}`);
   };
 
-  const handlePayOrRequest = () => {
+  const handlePay = () => {
     if (!user?.username) return;
-    
-    // Show modal or navigate to pay/request page
-    // For now, navigate to pay page
     router.push(`/pay?to=${encodeURIComponent(`@${user.username}`)}`);
+  };
+
+  const handleRequest = () => {
+    if (!user?.username) return;
+    router.push(`/request?to=${encodeURIComponent(`@${user.username}`)}`);
+  };
+
+  const handleCreateContact = async () => {
+    if (!currentUserId || !user?.id || currentUserId === user.id) return;
+
+    try {
+      setAddingContact(true);
+      toast.loading('Adding contact...');
+
+      const response = await axios.post(`${API_URL}/contacts`, {
+        userId: currentUserId,
+        contactUserId: user.id
+      });
+
+      toast.dismiss();
+      toast.success('Contact added');
+      setIsContact(true);
+    } catch (error: any) {
+      toast.dismiss();
+      console.error('Error adding contact:', error);
+      
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to add contact';
+      
+      // If it's a duplicate contact error, just mark as contact
+      if (error.response?.data?.code === '23505' || errorMessage.includes('already exists')) {
+        setIsContact(true);
+        toast.success('Contact already exists');
+      } else {
+        toast.error(errorMessage);
+      }
+    } finally {
+      setAddingContact(false);
+    }
   };
 
   if (loading || checkingAuth) {
@@ -184,18 +258,8 @@ export default function PublicProfilePage() {
               {/* Call to Action Section */}
               {!currentUser ? (
                 <>
-                  {/* Sign in prompt */}
-                  <div className="mb-8">
-                    <h3 className="text-3xl font-bold text-black mb-2">
-                      Sign in to pay this person
-                    </h3>
-                    <p className="text-gray-600 text-sm mt-2">
-                      Or create your Blockbook account
-                    </p>
-                  </div>
-
                   {/* Action Buttons */}
-                  <div className="space-y-3">
+                  <div className="space-y-3 mt-8">
                     <button
                       onClick={handleSignIn}
                       className="w-full px-4 py-3 bg-gray-200 text-black rounded-full hover:bg-gray-300 transition-colors font-semibold text-sm"
@@ -204,31 +268,40 @@ export default function PublicProfilePage() {
                     </button>
                     <button
                       onClick={handleGetBlockbook}
-                      className="w-full px-4 py-3 bg-white text-black border border-gray-300 rounded-full hover:bg-gray-50 transition-colors font-semibold text-sm flex items-center justify-center gap-2"
+                      className="w-full px-4 py-3 bg-white text-black border border-gray-300 rounded-full hover:bg-gray-50 transition-colors font-semibold text-sm"
                     >
-                      <img 
-                        src="/applogo.png" 
-                        alt="Blockbook" 
-                        className="w-5 h-5 object-contain"
-                      />
                       Get Blockbook
                     </button>
                   </div>
                 </>
               ) : (
                 <>
-                  {/* Pay or Request Button (if logged in) */}
-                  <button
-                    onClick={handlePayOrRequest}
-                    className="w-full px-4 py-3 bg-gray-200 text-black rounded-full hover:bg-gray-300 transition-colors font-semibold text-sm flex items-center justify-center gap-2"
-                  >
-                    <img 
-                      src="/applogo.png" 
-                      alt="Blockbook" 
-                      className="w-5 h-5 object-contain"
-                    />
-                    Pay or Request
-                  </button>
+                  {/* Pay and Request Buttons (if logged in) */}
+                  <div className="space-y-3">
+                    <button
+                      onClick={handlePay}
+                      className="w-full px-4 py-3 bg-gray-200 text-black rounded-full hover:bg-gray-300 transition-colors font-semibold text-sm"
+                    >
+                      Pay
+                    </button>
+                    <button
+                      onClick={handleRequest}
+                      className="w-full px-4 py-3 bg-gray-200 text-black rounded-full hover:bg-gray-300 transition-colors font-semibold text-sm"
+                    >
+                      Request
+                    </button>
+
+                    {/* Create Contact Button (if not already a contact and not viewing own profile) */}
+                    {currentUserId !== user?.id && !isContact && (
+                      <button
+                        onClick={handleCreateContact}
+                        disabled={addingContact || checkingContact}
+                        className="w-full px-4 py-3 bg-white text-black border border-gray-300 rounded-full hover:bg-gray-50 transition-colors font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {addingContact ? 'Adding...' : 'Create Contact'}
+                      </button>
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -238,5 +311,6 @@ export default function PublicProfilePage() {
     </div>
   );
 }
+
 
 

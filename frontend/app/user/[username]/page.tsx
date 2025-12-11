@@ -463,7 +463,7 @@ export default function UserProfilePage() {
               </div>
             )}
 
-            {/* Pay and Request Buttons */}
+            {/* Pay, Request, and Contact Buttons */}
             <div className="w-full max-w-xs space-y-3 mb-4">
               <button
                 onClick={handlePay}
@@ -485,83 +485,86 @@ export default function UserProfilePage() {
                 </svg>
                 Request
               </button>
+              
+              {/* Contact Button */}
+              {currentUserId && currentUserId !== user.id && (
+                <>
+                  {!isContact ? (
+                    <button
+                      onClick={handleCreateContact}
+                      disabled={creatingContact}
+                      className="w-full px-6 py-3 bg-gray-200 text-black rounded-full hover:bg-gray-300 transition-colors font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {creatingContact ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black"></div>
+                          <span>Adding...</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                          </svg>
+                          Create Contact
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleEditContact}
+                      className="w-full px-6 py-3 bg-gray-200 text-black rounded-full hover:bg-gray-300 transition-colors font-semibold text-sm flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                      Edit Contact
+                    </button>
+                  )}
+                </>
+              )}
             </div>
 
-            {/* Add/Edit Contact Section */}
-            {currentUserId && currentUserId !== user.id && (
-              <div className="w-full max-w-xs">
-                {!isContact ? (
+            {/* Edit Contact Form (shown when editing) */}
+            {currentUserId && currentUserId !== user.id && isContact && isEditingContact && (
+              <div className="w-full max-w-xs space-y-2 mb-4">
+                <input
+                  type="text"
+                  value={editingNickname}
+                  onChange={(e) => setEditingNickname(e.target.value)}
+                  placeholder="Nickname (optional)"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400 text-sm"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleSaveContact();
+                    } else if (e.key === 'Escape') {
+                      handleCancelEdit();
+                    }
+                  }}
+                  autoFocus
+                />
+                <div className="flex gap-2">
                   <button
-                    onClick={handleCreateContact}
-                    disabled={creatingContact}
-                    className="w-full px-4 py-2 bg-gray-200 text-black rounded-full hover:bg-gray-300 transition-colors font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    onClick={handleSaveContact}
+                    disabled={updatingContact || removingContact}
+                    className="flex-1 px-4 py-2 bg-gray-200 text-black rounded-full hover:bg-gray-300 transition-colors font-semibold text-sm disabled:opacity-50"
                   >
-                    {creatingContact ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black"></div>
-                        <span>Adding...</span>
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                        </svg>
-                        Add as contact
-                      </>
-                    )}
+                    {updatingContact ? 'Saving...' : 'Save'}
                   </button>
-                ) : isEditingContact ? (
-                  <div className="space-y-2">
-                    <input
-                      type="text"
-                      value={editingNickname}
-                      onChange={(e) => setEditingNickname(e.target.value)}
-                      placeholder="Nickname (optional)"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400 text-sm"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          handleSaveContact();
-                        } else if (e.key === 'Escape') {
-                          handleCancelEdit();
-                        }
-                      }}
-                      autoFocus
-                    />
-                    <div className="flex gap-2">
-                      <button
-                        onClick={handleSaveContact}
-                        disabled={updatingContact || removingContact}
-                        className="flex-1 px-4 py-2 bg-gray-200 text-black rounded-full hover:bg-gray-300 transition-colors font-semibold text-sm disabled:opacity-50"
-                      >
-                        {updatingContact ? 'Saving...' : 'Save'}
-                      </button>
-                      <button
-                        onClick={handleCancelEdit}
-                        disabled={updatingContact || removingContact}
-                        className="flex-1 px-4 py-2 border border-gray-300 text-black rounded-full hover:bg-gray-50 transition-colors font-medium text-sm disabled:opacity-50"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                    <button
-                      onClick={handleRemoveContact}
-                      disabled={updatingContact || removingContact}
-                      className="w-full px-4 py-2 text-red-600 border border-red-600 rounded-full hover:bg-red-50 transition-colors font-medium text-sm disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {removingContact ? 'Removing...' : 'Remove'}
-                    </button>
-                  </div>
-                ) : (
                   <button
-                    onClick={handleEditContact}
-                    className="w-full px-4 py-2 bg-gray-200 text-black rounded-full hover:bg-gray-300 transition-colors font-semibold text-sm flex items-center justify-center gap-2"
+                    onClick={handleCancelEdit}
+                    disabled={updatingContact || removingContact}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-black rounded-full hover:bg-gray-50 transition-colors font-medium text-sm disabled:opacity-50"
                   >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    Edit Contact
+                    Cancel
                   </button>
-                )}
+                </div>
+                <button
+                  onClick={handleRemoveContact}
+                  disabled={updatingContact || removingContact}
+                  className="w-full px-4 py-2 text-red-600 border border-red-600 rounded-full hover:bg-red-50 transition-colors font-medium text-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {removingContact ? 'Removing...' : 'Remove Contact'}
+                </button>
               </div>
             )}
           </div>
@@ -633,5 +636,6 @@ export default function UserProfilePage() {
     </div>
   );
 }
+
 
 

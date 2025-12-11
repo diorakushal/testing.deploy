@@ -38,3 +38,4 @@ CREATE TRIGGER trigger_update_contacts_updated_at
     EXECUTE FUNCTION update_contacts_updated_at();
 
 
+

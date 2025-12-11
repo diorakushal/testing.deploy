@@ -44,7 +44,7 @@ async function initTable() {
       `);
       
       if (columnCheck.rows.length > 0 && columnCheck.rows[0].data_type === 'integer') {
-        console.log('Updating chain_id column to VARCHAR(50) for Solana support...');
+        console.log('Updating chain_id column to VARCHAR(50) for chain ID support...');
         await pool.query(`
           ALTER TABLE payment_requests 
           ALTER COLUMN chain_id TYPE VARCHAR(50);

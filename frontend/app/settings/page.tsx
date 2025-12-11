@@ -6,7 +6,7 @@ import { useAccount, useSwitchChain, useChainId, useChains } from 'wagmi';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import { isAddress } from 'viem';
 import { supabase } from '@/lib/supabase';
-import { AVAILABLE_CHAINS, getChainConfig } from '@/lib/tokenConfig';
+import { AVAILABLE_CHAINS, getChainConfig, isEVMChain } from '@/lib/tokenConfig';
 import toast from 'react-hot-toast';
 import axios from 'axios';
 import UserAvatar from '@/components/UserAvatar';
@@ -308,6 +308,7 @@ export default function SettingsPage() {
 
   const getWalletForChain = (chainId: number | string): PreferredWallet | undefined => {
     const wallet = preferredWallets.find(w => {
+      // Handle numeric chain IDs
       const walletChainId = typeof w.chain_id === 'string' ? parseInt(w.chain_id) : w.chain_id;
       return walletChainId === chainId;
     });
@@ -317,8 +318,9 @@ export default function SettingsPage() {
   const handleAddWallet = async (targetChainId: number | string) => {
     if (!user?.id) return;
     
-    const chainName = getChainConfig(targetChainId as number)?.name || `Chain ${targetChainId}`;
+    const chainName = getChainConfig(targetChainId)?.name || `Chain ${targetChainId}`;
     
+    // EVM chains - use existing logic
     if (!isConnected) {
       if (openConnectModal) {
         openConnectModal();
@@ -329,7 +331,7 @@ export default function SettingsPage() {
     try {
       setConnectingChain(targetChainId as number);
       
-      if (currentChainId !== targetChainId && switchChain) {
+      if (isEVMChain(targetChainId) && currentChainId !== targetChainId && switchChain) {
         toast.loading(`Connecting to ${chainName}...`);
         try {
           await switchChain({ chainId: targetChainId as any });
@@ -358,14 +360,17 @@ export default function SettingsPage() {
         }
       }
       
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      const actualChainId = currentChainIdRef.current;
-      if (actualChainId !== targetChainId) {
-        toast.error(`Failed to switch to ${chainName}. Your wallet may not support this network. Please add the network to your wallet first.`);
-        setConnectingChain(null);
-        setLoading(false);
-        return;
+      // Only verify chain switch for EVM chains
+      if (isEVMChain(targetChainId)) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        const actualChainId = currentChainIdRef.current;
+        if (actualChainId !== targetChainId) {
+          toast.error(`Failed to switch to ${chainName}. Your wallet may not support this network. Please add the network to your wallet first.`);
+          setConnectingChain(null);
+          setLoading(false);
+          return;
+        }
       }
       
       if (!address || !isAddress(address)) {
@@ -778,6 +783,7 @@ export default function SettingsPage() {
                       </thead>
                       <tbody className="divide-y divide-gray-200">
                         {AVAILABLE_CHAINS.map((chain) => {
+                          // Parse chain ID (all are numeric for EVM chains)
                           const chainId = typeof chain.id === 'string' ? parseInt(chain.id) : chain.id;
                           const wallet = getWalletForChain(chainId);
                           const isConnecting = connectingChain === chainId;

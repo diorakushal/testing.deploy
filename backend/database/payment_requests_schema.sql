@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS payment_requests (
     amount NUMERIC(20, 6) NOT NULL,
     token_symbol VARCHAR(10) DEFAULT 'USDC',
     token_address VARCHAR(255) NOT NULL,
-    chain_id VARCHAR(50) NOT NULL, -- Can be integer (EVM) or 'solana'
+    chain_id VARCHAR(50) NOT NULL, -- Chain ID (numeric for EVM chains)
     chain_name VARCHAR(50) NOT NULL,
     caption TEXT,
     status VARCHAR(20) DEFAULT 'open', -- 'open', 'paid', 'cancelled'

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import axios from 'axios';
+import { api } from '@/lib/api-client';
 import { useAccount } from 'wagmi';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase';
@@ -109,9 +109,8 @@ export default function CreatePaymentRequestComposer({ onSuccess }: CreatePaymen
       setStep('creating');
       toast.loading('Creating crypto request...');
 
-      const response = await axios.post(`${API_URL}/payment-requests`, {
+      const response = await api.post('/payment-requests', {
         requesterAddress: address,
-        requesterUserId: userId, // Authenticated user ID from Supabase
         amount: formData.amount,
         tokenSymbol: 'USDC',
         tokenAddress: BASE_USDC_ADDRESS,

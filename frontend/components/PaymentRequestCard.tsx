@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
+import { api } from '@/lib/api-client';
 import toast from 'react-hot-toast';
 import { formatUnits, parseUnits, Address, isAddress } from 'viem';
 import { useAccount, useChainId, useSwitchChain, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
@@ -300,9 +300,7 @@ export default function PaymentRequestCard({ request, userAddress, userId, conta
       setShowCancelModal(false);
       toast.loading('Cancelling request...');
 
-      const response = await axios.patch(`${API_URL}/payment-requests/${request.id}/cancel`, {
-        requesterAddress: address
-      });
+      const response = await api.patch(`/payment-requests/${request.id}/cancel`);
 
       toast.dismiss();
       toast.success('Payment request deleted');
@@ -473,7 +471,7 @@ export default function PaymentRequestCard({ request, userAddress, userId, conta
         });
         
         try {
-          const response = await axios.patch(`${API_URL}/payment-requests/${request.id}/paid`, {
+          const response = await api.patch(`/payment-requests/${request.id}/paid`, {
             txHash: hash,
             paidBy: address
           });

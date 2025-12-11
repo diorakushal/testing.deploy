@@ -388,7 +388,7 @@ export default function SignUpPage() {
                       value={formData.firstName}
                       onChange={handleChange}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400"
-                      placeholder="First name"
+                      placeholder="Satoshi"
                       required
                     />
                   </div>
@@ -405,7 +405,7 @@ export default function SignUpPage() {
                       value={formData.lastName}
                       onChange={handleChange}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400"
-                      placeholder="Last name"
+                      placeholder="Nakamoto"
                       required
                     />
                   </div>
@@ -428,7 +428,7 @@ export default function SignUpPage() {
                         className={`w-full pl-8 pr-4 py-3 border rounded-lg focus:outline-none focus:border-black transition-all bg-white text-black placeholder-gray-400 ${
                           usernameError ? 'border-red-500' : 'border-gray-300'
                         }`}
-                        placeholder="johndoe"
+                        placeholder="satoshinakamoto"
                         required
                         minLength={5}
                         maxLength={30}

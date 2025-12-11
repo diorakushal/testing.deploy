@@ -98,17 +98,6 @@ export const CHAINS: Record<number | string, ChainConfig> = {
       symbol: 'AVAX',
       decimals: 18
     }
-  },
-  'tron': {
-    id: 'tron' as any,
-    name: 'Tron',
-    rpcUrl: 'https://api.trongrid.io',
-    explorer: 'https://tronscan.org',
-    nativeCurrency: {
-      name: 'TRX',
-      symbol: 'TRX',
-      decimals: 6
-    }
   }
 };
 
@@ -414,21 +403,6 @@ export const TOKENS: TokenConfig[] = [
     address: '0x5d3a1Ff2b6BAb83b63cd9AD0787074081a52ef34',
     decimals: 18,
     chainId: 43114
-  },
-  // Tron (TRC20 tokens)
-  {
-    symbol: 'USDC',
-    name: 'USD Coin',
-    address: 'TEkxiTehnzSmSe2XqrBj4w32RUN966rdz8', // Tron USDC (TRC20)
-    decimals: 6,
-    chainId: 'tron' as any
-  },
-  {
-    symbol: 'USDT',
-    name: 'Tether USD',
-    address: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', // Tron USDT (TRC20)
-    decimals: 6,
-    chainId: 'tron' as any
   }
 ];
 
@@ -456,4 +430,13 @@ export const AVAILABLE_CHAINS = [
   { id: 42161, name: 'Arbitrum' },
   { id: 10, name: 'Optimism' }
 ];
+
+// Helper function to check if a chain is EVM-compatible
+export function isEVMChain(chainId: number | string): boolean {
+  if (typeof chainId === 'string') {
+    return false; // String chain IDs are not EVM
+  }
+  // All numeric chain IDs in our config are EVM chains
+  return typeof chainId === 'number';
+}
 
