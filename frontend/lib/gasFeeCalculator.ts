@@ -138,7 +138,7 @@ export async function calculateFinalGasFee(
     } else {
       gasPrice = parseUnits('20', 9); // Default: 20 gwei
     }
-    console.log('[GasFeeCalculator] Fallback gas price:', formatUnits(gasPrice, 'gwei'), 'gwei');
+    console.log('[GasFeeCalculator] Fallback gas price:', formatUnits(gasPrice, 9), 'gwei');
   } else {
     // Try to fetch from network with very short timeout
     try {
@@ -148,7 +148,7 @@ export async function calculateFinalGasFee(
           setTimeout(() => reject(new Error('Gas price fetch timeout')), 2000)
         )
       ]);
-      console.log('[GasFeeCalculator] ✅ Fetched gas price from network:', formatUnits(gasPrice, 'gwei'), 'gwei');
+      console.log('[GasFeeCalculator] ✅ Fetched gas price from network:', formatUnits(gasPrice, 9), 'gwei');
     } catch (err: any) {
       console.warn('[GasFeeCalculator] ⚠️ Failed to fetch gas price, using fallback:', err.message || err);
       usingFallbackGas = true;
@@ -164,7 +164,7 @@ export async function calculateFinalGasFee(
       } else {
         gasPrice = parseUnits('20', 9);
       }
-      console.warn('[GasFeeCalculator] Using fallback gas price:', formatUnits(gasPrice, 'gwei'), 'gwei');
+      console.warn('[GasFeeCalculator] Using fallback gas price:', formatUnits(gasPrice, 9), 'gwei');
     }
   }
 
