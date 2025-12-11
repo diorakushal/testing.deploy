@@ -256,11 +256,12 @@ export default function GasFeeDisplay({ chainId, tokenSymbol, amount, onTotalAmo
 
         // Format native currency fee based on chain
         let formattedFeeNative: string;
-        if (chainIdNum === 56) {
+        const chainIdForFormat = chainIdNum as number; // Type assertion to avoid narrowing
+        if (chainIdForFormat === 56) {
           formattedFeeNative = estimatedFeeEth.toFixed(8); // BNB - more precision
-        } else if (chainIdNum === 137) {
+        } else if (chainIdForFormat === 137) {
           formattedFeeNative = estimatedFeeEth.toFixed(8); // MATIC - more precision
-        } else if (chainIdNum === 43114) {
+        } else if (chainIdForFormat === 43114) {
           formattedFeeNative = estimatedFeeEth.toFixed(8); // AVAX - more precision
         } else {
           formattedFeeNative = estimatedFeeEth < 0.0001 
