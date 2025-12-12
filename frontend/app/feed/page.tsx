@@ -160,14 +160,14 @@ export default function Feed() {
       const fetchPromises = [
         api.get('/payment-sends', {
           params: { sender_user_id: userId },
-          timeout: 10000
+          timeout: 20000 // Increased to 20s for Render free tier cold starts
         }).catch((err) => {
           console.error('[Feed] Error fetching sends FROM user (by ID):', err);
           return [];
         }),
         api.get('/payment-sends', {
           params: { recipient_user_id: userId },
-          timeout: 10000
+          timeout: 20000 // Increased to 20s for Render free tier cold starts
         }).catch((err) => {
           console.error('[Feed] Error fetching sends TO user (by ID):', err);
           return [];
@@ -179,14 +179,14 @@ export default function Feed() {
         fetchPromises.push(
           api.get('/payment-sends', {
             params: { sender_address: walletAddress },
-            timeout: 10000
+            timeout: 20000 // Increased to 20s for Render free tier cold starts
           }).catch((err) => {
             console.error('[Feed] Error fetching sends FROM user (by address):', err);
             return [];
           }),
           api.get('/payment-sends', {
             params: { recipient_address: walletAddress },
-            timeout: 10000
+            timeout: 20000 // Increased to 20s for Render free tier cold starts
           }).catch((err) => {
             console.error('[Feed] Error fetching sends TO user (by address):', err);
             return [];
@@ -269,14 +269,14 @@ export default function Feed() {
         const [fromUser, toUser] = await Promise.all([
           api.get('/payment-requests', {
             params: { requester_user_id: userId },
-            timeout: 10000
+            timeout: 20000 // Increased to 20s for Render free tier cold starts
           }).catch((err) => {
             console.error('Error fetching requests FROM user:', err);
             return [];
           }),
           api.get('/payment-requests', {
             params: { recipient_user_id: userId },
-            timeout: 10000
+            timeout: 20000 // Increased to 20s for Render free tier cold starts
           }).catch((err) => {
             console.error('Error fetching requests TO user:', err);
             return [];

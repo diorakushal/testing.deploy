@@ -1856,7 +1856,8 @@ app.get('/api/payment-sends',
     let query = supabase
       .from('payment_sends')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(100); // Limit results to prevent slow queries
 
     if (sender_user_id) {
       query = query.eq('sender_user_id', sender_user_id);
