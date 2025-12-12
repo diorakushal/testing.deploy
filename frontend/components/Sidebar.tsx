@@ -287,7 +287,7 @@ export default function Sidebar({ onWalletConnect }: SidebarProps) {
               alt="Blockbook" 
               className="w-10 h-10 object-contain flex-shrink-0"
             />
-            <h1 className="text-xl font-bold text-white" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', letterSpacing: '-0.02em' }}>blockbook</h1>
+            <h1 className="text-xl font-blockbook text-white">blockbook</h1>
           </Link>
         </div>
 

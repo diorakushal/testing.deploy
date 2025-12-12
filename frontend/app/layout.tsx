@@ -3,6 +3,14 @@ import "./globals.css";
 import Toaster from "./Toaster";
 import Providers from "@/components/WagmiProvider";
 import SidebarWrapper from "@/components/SidebarWrapper";
+import { Poppins } from "next/font/google";
+
+const poppins = Poppins({
+  weight: ['400', '500', '600', '700'],
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-poppins',
+});
 
 export const metadata: Metadata = {
   title: "Blockbook - Crypto Requests",
@@ -24,7 +32,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={poppins.variable}>
       <body className="bg-white" suppressHydrationWarning>
         <Providers>
           <SidebarWrapper>

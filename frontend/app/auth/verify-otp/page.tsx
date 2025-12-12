@@ -281,6 +281,7 @@ export default function VerifyOtpPage() {
   };
 
   // Handle wallet connection during onboarding (only for signup, not login)
+  // IMPORTANT: Wallet MUST be connected before PreferredWalletsModal can show
   useEffect(() => {
     if (type === 'login') return; // Skip onboarding for login
     if (status === 'onboarding' && showWalletConnect && !walletConnected && isConnected && address && userId) {
@@ -289,26 +290,30 @@ export default function VerifyOtpPage() {
           await updateUserWalletAddress(userId, address);
           setWalletConnected(true);
           setShowWalletConnect(false);
+          // Only show PreferredWalletsModal AFTER wallet is connected
           setTimeout(() => {
             setShowPreferredWallets(true);
           }, 500);
         } catch (error) {
           console.error('Error updating wallet address:', error);
+          toast.error('Failed to save wallet address. Please try again.');
         }
       };
       handleWalletConnected();
     }
-  }, [status, showWalletConnect, walletConnected, isConnected, address, userId]);
+  }, [status, showWalletConnect, walletConnected, isConnected, address, userId, type]);
 
   // Open wallet connect modal when onboarding starts (only for signup, not login)
+  // This ensures wallet connection happens FIRST before PreferredWalletsModal
   useEffect(() => {
     if (type === 'login') return; // Skip onboarding for login
-    if (status === 'onboarding' && showWalletConnect && !isConnected && openConnectModal) {
+    if (status === 'onboarding' && showWalletConnect && !isConnected && !walletConnected && openConnectModal) {
+      // Small delay to ensure UI is ready
       setTimeout(() => {
         openConnectModal();
       }, 300);
     }
-  }, [status, showWalletConnect, isConnected, openConnectModal]);
+  }, [status, showWalletConnect, isConnected, walletConnected, openConnectModal, type]);
 
   const handlePreferredWalletsClose = async () => {
     if (!userId) return;
@@ -426,19 +431,26 @@ export default function VerifyOtpPage() {
             {status === 'onboarding' && type !== 'login' && (
               <div>
                 <h1 className="text-3xl font-bold text-black mb-2">Email verified!</h1>
-                <p className="text-gray-600 text-sm mt-2">Please connect your wallet to continue</p>
                 {!walletConnected && (
-                  <div className="mt-6">
-                    <button
-                      onClick={() => openConnectModal?.()}
-                      className="w-full px-4 py-3 bg-black text-white rounded-full hover:bg-gray-900 active:scale-[0.98] transition-all duration-200 font-medium"
-                    >
-                      Connect Wallet
-                    </button>
-                  </div>
+                  <>
+                    <p className="text-gray-600 text-sm mt-2 mb-6">
+                      To get started, please connect your wallet first. This is required before you can set up your preferred wallets.
+                    </p>
+                    <div className="mt-6">
+                      <button
+                        onClick={() => openConnectModal?.()}
+                        className="w-full px-4 py-3 bg-black text-white rounded-full hover:bg-gray-900 active:scale-[0.98] transition-all duration-200 font-medium"
+                      >
+                        Connect Wallet
+                      </button>
+                    </div>
+                  </>
                 )}
                 {walletConnected && !preferredWalletsComplete && (
-                  <p className="text-gray-600 text-sm mt-3">Setting up your preferred wallets...</p>
+                  <>
+                    <p className="text-gray-600 text-sm mt-2">Wallet connected! Now let's set up your preferred wallets...</p>
+                    <p className="text-gray-500 text-xs mt-3">Setting up your preferred wallets...</p>
+                  </>
                 )}
               </div>
             )}
@@ -466,8 +478,8 @@ export default function VerifyOtpPage() {
         </div>
       </main>
 
-      {/* Preferred Wallets Modal */}
-      {userId && (
+      {/* Preferred Wallets Modal - ONLY show after wallet is connected */}
+      {userId && walletConnected && (
         <PreferredWalletsModal
           isOpen={showPreferredWallets}
           onClose={handlePreferredWalletsClose}

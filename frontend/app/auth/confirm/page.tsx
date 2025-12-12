@@ -130,6 +130,7 @@ export default function ConfirmEmailPage() {
   }, [router]);
 
   // Handle wallet connection during onboarding
+  // IMPORTANT: Wallet MUST be connected before PreferredWalletsModal can show
   useEffect(() => {
     if (status === 'onboarding' && showWalletConnect && !walletConnected && isConnected && address && userId) {
       // Wallet just connected - update user's wallet address in database
@@ -138,7 +139,7 @@ export default function ConfirmEmailPage() {
           await updateUserWalletAddress(userId, address);
           setWalletConnected(true);
           setShowWalletConnect(false);
-          // Show preferred wallets modal after a brief delay
+          // Only show PreferredWalletsModal AFTER wallet is connected
           setTimeout(() => {
             setShowPreferredWallets(true);
           }, 500);
@@ -151,14 +152,15 @@ export default function ConfirmEmailPage() {
   }, [status, showWalletConnect, walletConnected, isConnected, address, userId]);
 
   // Open wallet connect modal when onboarding starts
+  // This ensures wallet connection happens FIRST before PreferredWalletsModal
   useEffect(() => {
-    if (status === 'onboarding' && showWalletConnect && !isConnected && openConnectModal) {
+    if (status === 'onboarding' && showWalletConnect && !isConnected && !walletConnected && openConnectModal) {
       // Small delay to ensure modal can open
       setTimeout(() => {
         openConnectModal();
       }, 300);
     }
-  }, [status, showWalletConnect, isConnected, openConnectModal]);
+  }, [status, showWalletConnect, isConnected, walletConnected, openConnectModal]);
 
   // User can add as many preferred wallets as they want
   // Redirect only happens when they click "Done" button in the modal
@@ -219,19 +221,26 @@ export default function ConfirmEmailPage() {
             {status === 'onboarding' && (
               <div>
                 <h1 className="text-3xl font-bold text-black mb-2">Email verified!</h1>
-                <p className="text-gray-600 text-sm mt-2">Please connect your wallet to continue</p>
                 {!walletConnected && (
-                  <div className="mt-6">
-                    <button
-                      onClick={() => openConnectModal?.()}
-                      className="w-full px-4 py-3 bg-black text-white rounded-full hover:bg-gray-900 active:scale-[0.98] transition-all duration-200 font-medium"
-                    >
-                      Connect Wallet
-                    </button>
-                  </div>
+                  <>
+                    <p className="text-gray-600 text-sm mt-2 mb-6">
+                      To get started, please connect your wallet first. This is required before you can set up your preferred wallets.
+                    </p>
+                    <div className="mt-6">
+                      <button
+                        onClick={() => openConnectModal?.()}
+                        className="w-full px-4 py-3 bg-black text-white rounded-full hover:bg-gray-900 active:scale-[0.98] transition-all duration-200 font-medium"
+                      >
+                        Connect Wallet
+                      </button>
+                    </div>
+                  </>
                 )}
                 {walletConnected && !preferredWalletsComplete && (
-                  <p className="text-gray-600 text-sm mt-3">Setting up your preferred wallets...</p>
+                  <>
+                    <p className="text-gray-600 text-sm mt-2">Wallet connected! Now let's set up your preferred wallets...</p>
+                    <p className="text-gray-500 text-xs mt-3">Setting up your preferred wallets...</p>
+                  </>
                 )}
               </div>
             )}
@@ -252,8 +261,8 @@ export default function ConfirmEmailPage() {
         </div>
       </main>
 
-      {/* Preferred Wallets Modal - shown after wallet connects */}
-      {userId && (
+      {/* Preferred Wallets Modal - ONLY show after wallet is connected */}
+      {userId && walletConnected && (
         <PreferredWalletsModal
           isOpen={showPreferredWallets}
           onClose={handlePreferredWalletsClose}
