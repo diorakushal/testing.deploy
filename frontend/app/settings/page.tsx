@@ -500,7 +500,11 @@ export default function SettingsPage() {
       toast.dismiss();
       toast.success('Wallet address saved!');
       
-      const savedWallet: PreferredWallet = response.data;
+      const savedWallet = await api.post('/preferred-wallets', {
+        userId: user.id,
+        chainId: targetChainId,
+        receivingWalletAddress: trimmedAddress
+      });
       setPreferredWallets(prev => {
         const existing = prev.find(w => {
           const wChainId = typeof w.chain_id === 'string' ? parseInt(w.chain_id) : w.chain_id;
