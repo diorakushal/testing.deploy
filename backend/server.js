@@ -1886,7 +1886,19 @@ app.get('/api/payment-sends',
     const { data, error } = await query;
 
     if (error) {
-      console.error('[PaymentSendsAPI] Error fetching payment sends:', error);
+      console.error('[PaymentSendsAPI] ❌ Supabase query error:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
+      
+      // If table doesn't exist, return empty array instead of error
+      if (error.code === '42P01' || error.message?.includes('does not exist')) {
+        console.log('[PaymentSendsAPI] Payment sends table does not exist yet. Returning empty array.');
+        return res.json([]);
+      }
+      
       throw error;
     }
 
@@ -2004,8 +2016,16 @@ app.get('/api/payment-sends',
 
     res.json(data || []);
   } catch (error) {
-    console.error('Error fetching payment sends:', error);
-    res.status(500).json({ error: error.message });
+    console.error('[PaymentSendsAPI] ❌ Error fetching payment sends:', {
+      error: error.message,
+      stack: error.stack,
+      code: error.code,
+      details: error.details || error.hint || 'No additional details'
+    });
+    res.status(500).json({ 
+      error: error.message || 'Internal server error',
+      details: error.details || error.hint || 'Failed to fetch payment sends'
+    });
   }
 });
 
