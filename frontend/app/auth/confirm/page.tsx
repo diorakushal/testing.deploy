@@ -231,9 +231,18 @@ export default function ConfirmEmailPage() {
                           // Remember if wallet was already connected before user clicked
                           wasConnectedBeforeClickRef.current = isConnected;
                           setUserClickedConnect(true);
+                          
+                          // Always try to open the modal - even if wallet is already connected
+                          // This allows user to switch wallets or confirm connection
                           if (openConnectModal) {
-                            openConnectModal();
+                            try {
+                              openConnectModal();
+                            } catch (error) {
+                              console.error('Error opening connect modal:', error);
+                              toast.error('Failed to open wallet connection. Please try again.');
+                            }
                           } else {
+                            console.error('openConnectModal is not available');
                             toast.error('Wallet connection not available. Please refresh the page.');
                           }
                         }}
@@ -260,16 +269,6 @@ export default function ConfirmEmailPage() {
                         >
                           Continue
                         </button>
-                      </div>
-                    )}
-                    {/* If wallet was already connected before clicking, show message to disconnect and reconnect */}
-                    {userClickedConnect && isConnected && wasConnectedBeforeClickRef.current && (
-                      <div className="mt-4">
-                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                          <p className="text-sm text-yellow-800 mb-2">
-                            A wallet is already connected. Please disconnect it first, then click "Connect Wallet" to connect through the modal.
-                          </p>
-                        </div>
                       </div>
                     )}
                   </>
