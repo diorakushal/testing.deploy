@@ -150,14 +150,44 @@ export default function ConfirmEmailPage() {
     }
   }, [status, showWalletConnect, walletConnected, isConnected, address, userId]);
 
-  // Open wallet connect modal when onboarding starts
+  // Auto-open wallet connect modal when onboarding starts
   // This ensures wallet connection happens FIRST before PreferredWalletsModal
   useEffect(() => {
-    if (status === 'onboarding' && showWalletConnect && !isConnected && !walletConnected && openConnectModal) {
-      // Small delay to ensure modal can open
-      setTimeout(() => {
-        openConnectModal();
-      }, 300);
+    if (status === 'onboarding' && showWalletConnect && !isConnected && !walletConnected) {
+      console.log('[Confirm] Onboarding started, attempting to open wallet connect modal', {
+        openConnectModal: !!openConnectModal,
+        isConnected,
+        walletConnected
+      });
+      
+      // Function to attempt opening the modal
+      const attemptOpenModal = (attemptNumber: number) => {
+        if (openConnectModal) {
+          console.log(`[Confirm] Attempt ${attemptNumber}: Opening wallet connect modal`);
+          try {
+            openConnectModal();
+          } catch (error) {
+            console.error(`[Confirm] Attempt ${attemptNumber} failed:`, error);
+            // Retry if first attempt fails
+            if (attemptNumber === 1) {
+              setTimeout(() => attemptOpenModal(2), 1000);
+            }
+          }
+        } else {
+          console.warn(`[Confirm] Attempt ${attemptNumber}: openConnectModal not available yet`);
+          // Retry if modal isn't ready
+          if (attemptNumber < 3) {
+            setTimeout(() => attemptOpenModal(attemptNumber + 1), 1000);
+          }
+        }
+      };
+      
+      // Initial attempt after delay to ensure RainbowKit is initialized
+      const timer = setTimeout(() => {
+        attemptOpenModal(1);
+      }, 1000); // Increased delay to ensure RainbowKit is fully ready
+      
+      return () => clearTimeout(timer);
     }
   }, [status, showWalletConnect, isConnected, walletConnected, openConnectModal]);
 
