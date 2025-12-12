@@ -132,8 +132,7 @@ export default function LoginPage() {
                 <img 
                   src="/applogo.png" 
                   alt="Blockbook" 
-                  className="w-16 h-16 object-contain bg-white"
-                  style={{ backgroundColor: '#ffffff' }}
+                  className="w-16 h-16 object-contain"
                 />
                 <h1 className="text-2xl font-bold text-black" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', letterSpacing: '-0.02em' }}>blockbook</h1>
               </Link>

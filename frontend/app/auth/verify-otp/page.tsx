@@ -336,8 +336,7 @@ export default function VerifyOtpPage() {
           <img 
             src="/applogo.png" 
             alt="Blockbook" 
-            className="w-10 h-10 object-contain bg-white"
-            style={{ backgroundColor: '#ffffff' }}
+            className="w-10 h-10 object-contain"
           />
         </Link>
       </div>

@@ -282,13 +282,11 @@ export default function Sidebar({ onWalletConnect }: SidebarProps) {
         <div className="flex-shrink-0 px-4 pt-6 pb-6">
           {/* Logo and Blockbook Text - Left Aligned */}
           <Link href="/feed" className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-black rounded flex items-center justify-center flex-shrink-0">
-              <img 
-                src="/applogo.png" 
-                alt="Blockbook" 
-                className="w-8 h-8 object-contain"
-              />
-            </div>
+            <img 
+              src="/applogo.png" 
+              alt="Blockbook" 
+              className="w-10 h-10 object-contain flex-shrink-0"
+            />
             <h1 className="text-xl font-bold text-white" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', letterSpacing: '-0.02em' }}>blockbook</h1>
           </Link>
         </div>

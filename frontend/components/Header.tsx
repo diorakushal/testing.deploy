@@ -549,8 +549,7 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                 <img 
                   src="/applogo.png" 
                   alt="Blockbook" 
-                  className="w-12 h-12 object-contain bg-white"
-                  style={{ backgroundColor: '#ffffff' }}
+                  className="w-12 h-12 object-contain"
                 />
                 <h1 className="text-xl font-bold text-black" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif', letterSpacing: '-0.02em' }}>blockbook</h1>
               </Link>
