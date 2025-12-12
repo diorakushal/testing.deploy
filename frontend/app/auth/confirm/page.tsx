@@ -232,18 +232,18 @@ export default function ConfirmEmailPage() {
                           wasConnectedBeforeClickRef.current = isConnected;
                           setUserClickedConnect(true);
                           
-                          // Always try to open the modal - even if wallet is already connected
-                          // This allows user to switch wallets or confirm connection
-                          if (openConnectModal) {
-                            try {
-                              openConnectModal();
-                            } catch (error) {
-                              console.error('Error opening connect modal:', error);
-                              toast.error('Failed to open wallet connection. Please try again.');
-                            }
-                          } else {
-                            console.error('openConnectModal is not available');
-                            toast.error('Wallet connection not available. Please refresh the page.');
+                          // Open the RainbowKit connect modal
+                          if (!openConnectModal) {
+                            console.error('[Confirm] openConnectModal is not available');
+                            toast.error('Wallet connection is not ready. Please wait a moment and try again.');
+                            return;
+                          }
+                          
+                          try {
+                            openConnectModal();
+                          } catch (error) {
+                            console.error('[Confirm] Error opening connect modal:', error);
+                            toast.error('Failed to open wallet connection. Please try again.');
                           }
                         }}
                         className="w-full px-4 py-3 bg-black text-white rounded-full hover:bg-gray-900 active:scale-[0.98] transition-all duration-200 font-medium"
