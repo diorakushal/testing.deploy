@@ -301,8 +301,20 @@ export default function VerifyOtpPage() {
     }
   }, [status, showWalletConnect, walletConnected, isConnected, address, userId, type]);
 
-  // Don't auto-open wallet connect modal - let user click the button
-  // This gives them control and makes the flow clearer
+  // Auto-open wallet connect modal when onboarding starts (only for signup, not login)
+  // This ensures wallet connection happens FIRST before PreferredWalletsModal
+  useEffect(() => {
+    if (type === 'login') return; // Skip onboarding for login
+    if (status === 'onboarding' && showWalletConnect && !isConnected && !walletConnected && openConnectModal) {
+      // Small delay to ensure UI is ready and user sees the onboarding message
+      const timer = setTimeout(() => {
+        if (openConnectModal) {
+          openConnectModal();
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [status, showWalletConnect, isConnected, walletConnected, openConnectModal, type]);
 
   const handlePreferredWalletsClose = async () => {
     if (!userId) return;
