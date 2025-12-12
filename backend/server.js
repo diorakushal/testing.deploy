@@ -53,12 +53,20 @@ app.use(cors({
       return callback(null, true);
     }
     
+    // Check exact match first
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
-    } else {
-      console.warn(`⚠️  CORS blocked request from origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
+      return;
     }
+    
+    // Allow Vercel preview URLs (pattern: *.vercel.app)
+    if (origin.endsWith('.vercel.app')) {
+      callback(null, true);
+      return;
+    }
+    
+    console.warn(`⚠️  CORS blocked request from origin: ${origin}`);
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS'],
