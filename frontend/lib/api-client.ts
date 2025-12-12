@@ -27,11 +27,17 @@ export const getAuthHeaders = async (): Promise<Record<string, string>> => {
     const { data: { session } } = await supabase.auth.getSession();
     
     if (session?.access_token) {
+      if (typeof window !== 'undefined') {
+        console.log('[API Client] Auth token found, length:', session.access_token.length);
+      }
       return {
         'Authorization': `Bearer ${session.access_token}`,
       };
     }
     
+    if (typeof window !== 'undefined') {
+      console.warn('[API Client] No auth token available');
+    }
     return {};
   } catch (error) {
     console.error('Error getting auth headers:', error);
