@@ -241,7 +241,7 @@ export default function Header({ onWalletConnect }: HeaderProps) {
             .single();
           
             const profileTimeoutPromise = new Promise((_, reject) => {
-              setTimeout(() => reject(new Error('Profile fetch timeout')), 3000);
+              setTimeout(() => reject(new Error('Profile fetch timeout')), 10000); // Increased to 10s
             });
             
             const { data: profile, error } = await Promise.race([

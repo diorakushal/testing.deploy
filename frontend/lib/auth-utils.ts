@@ -22,7 +22,7 @@ export async function ensureUserRecord(authUser: User): Promise<boolean> {
       .single();
     
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('ensureUserRecord timeout')), 3000);
+      setTimeout(() => reject(new Error('ensureUserRecord timeout')), 10000); // Increased to 10s
     });
     
     // Check if user record exists with timeout
@@ -52,7 +52,7 @@ export async function ensureUserRecord(authUser: User): Promise<boolean> {
         });
       
       const insertTimeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('insert timeout')), 3000);
+        setTimeout(() => reject(new Error('insert timeout')), 10000); // Increased to 10s
       });
       
       const { error: insertError } = await Promise.race([
@@ -97,7 +97,7 @@ export async function ensureUserRecord(authUser: User): Promise<boolean> {
       .eq('id', authUser.id);
     
     const updateTimeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('update timeout')), 3000);
+      setTimeout(() => reject(new Error('update timeout')), 10000); // Increased to 10s
     });
     
     const { error: updateError } = await Promise.race([
