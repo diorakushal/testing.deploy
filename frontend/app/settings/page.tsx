@@ -390,15 +390,13 @@ export default function SettingsPage() {
       setLoading(true);
       toast.loading('Saving wallet address...');
       
-      await api.post('/preferred-wallets', {
+      const savedWallet = await api.post('/preferred-wallets', {
         userId: user.id,
         chainId: targetChainId,
         receivingWalletAddress: address
       });
 
       toast.dismiss();
-      
-      const savedWallet: PreferredWallet = response.data;
       
       setPreferredWallets(prev => {
         const existing = prev.find(w => {
