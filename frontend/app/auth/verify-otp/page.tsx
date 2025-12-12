@@ -303,48 +303,8 @@ export default function VerifyOtpPage() {
     }
   };
 
-  // Auto-open wallet connect modal when onboarding starts (only for signup, not login)
-  // This ensures wallet connection happens FIRST before PreferredWalletsModal
-  // Only auto-open if wallet is NOT already connected (to prevent auto-connect bypass)
-  useEffect(() => {
-    if (type === 'login') return; // Skip onboarding for login
-    if (status === 'onboarding' && showWalletConnect && !isConnected && !walletConnected && !walletConfirmed) {
-      console.log('[VerifyOTP] Onboarding started, attempting to open wallet connect modal', {
-        openConnectModal: !!openConnectModal,
-        isConnected,
-        walletConnected
-      });
-      
-      // Function to attempt opening the modal
-      const attemptOpenModal = (attemptNumber: number) => {
-        if (openConnectModal) {
-          console.log(`[VerifyOTP] Attempt ${attemptNumber}: Opening wallet connect modal`);
-          try {
-            openConnectModal();
-          } catch (error) {
-            console.error(`[VerifyOTP] Attempt ${attemptNumber} failed:`, error);
-            // Retry if first attempt fails
-            if (attemptNumber === 1) {
-              setTimeout(() => attemptOpenModal(2), 1000);
-            }
-          }
-        } else {
-          console.warn(`[VerifyOTP] Attempt ${attemptNumber}: openConnectModal not available yet`);
-          // Retry if modal isn't ready
-          if (attemptNumber < 3) {
-            setTimeout(() => attemptOpenModal(attemptNumber + 1), 1000);
-          }
-        }
-      };
-      
-      // Initial attempt after delay to ensure RainbowKit is initialized
-      const timer = setTimeout(() => {
-        attemptOpenModal(1);
-      }, 1000); // Increased delay to ensure RainbowKit is fully ready
-      
-      return () => clearTimeout(timer);
-    }
-  }, [status, showWalletConnect, isConnected, walletConnected, walletConfirmed, openConnectModal, type]);
+  // NO auto-connect - user must manually click "Connect Wallet" button
+  // This gives users full control over when to connect their wallet
 
   const handlePreferredWalletsClose = async () => {
     if (!userId) return;
