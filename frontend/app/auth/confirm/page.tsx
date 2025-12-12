@@ -22,6 +22,7 @@ export default function ConfirmEmailPage() {
   const [preferredWalletsComplete, setPreferredWalletsComplete] = useState(false);
   const [walletConfirmed, setWalletConfirmed] = useState(false); // Track if user explicitly confirmed wallet
   const [userClickedConnect, setUserClickedConnect] = useState(false); // Track if user clicked Connect Wallet button
+  const [wasConnectedBeforeClick, setWasConnectedBeforeClick] = useState(false); // Track if wallet was connected before user clicked button
   
   const { address, isConnected } = useAccount();
   const { openConnectModal } = useConnectModal();
@@ -224,24 +225,26 @@ export default function ConfirmEmailPage() {
                     <p className="text-gray-500 text-xs mb-6">
                       Connect your wallets for each chain where you want to receive payments. You can either connect your wallet or manually enter a wallet address. When someone sends you a payment, they'll see your preferred wallet addresses for the chains you've configured.
                     </p>
-                    {!isConnected ? (
-                      <div className="mt-6">
-                        <button
-                          onClick={() => {
-                            setUserClickedConnect(true);
-                            if (openConnectModal) {
-                              openConnectModal();
-                            } else {
-                              toast.error('Wallet connection not available. Please refresh the page.');
-                            }
-                          }}
-                          className="w-full px-4 py-3 bg-black text-white rounded-full hover:bg-gray-900 active:scale-[0.98] transition-all duration-200 font-medium"
-                        >
-                          Connect Wallet
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="mt-6">
+                    <div className="mt-6">
+                      <button
+                        onClick={() => {
+                          // Remember if wallet was already connected before user clicked
+                          setWasConnectedBeforeClick(isConnected);
+                          setUserClickedConnect(true);
+                          if (openConnectModal) {
+                            openConnectModal();
+                          } else {
+                            toast.error('Wallet connection not available. Please refresh the page.');
+                          }
+                        }}
+                        className="w-full px-4 py-3 bg-black text-white rounded-full hover:bg-gray-900 active:scale-[0.98] transition-all duration-200 font-medium"
+                      >
+                        Connect Wallet
+                      </button>
+                    </div>
+                    {/* Only show Continue button if user clicked Connect AND wallet is now connected */}
+                    {userClickedConnect && isConnected && address && (
+                      <div className="mt-4">
                         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
                           <p className="text-sm text-gray-700 mb-1">Wallet connected:</p>
                           <p className="text-sm font-mono text-black">
