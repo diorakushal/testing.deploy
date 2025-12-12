@@ -1852,6 +1852,12 @@ app.get('/api/payment-sends',
     console.log('[PaymentSendsAPI] Fetching payment sends', { sender_user_id, recipient_user_id, sender_address, recipient_address, status, txHash });
 
     const { supabase } = require('./lib/supabase');
+    
+    // Validate Supabase client
+    if (!supabase) {
+      console.error('[PaymentSendsAPI] ❌ Supabase client not initialized');
+      return res.status(500).json({ error: 'Database connection error' });
+    }
 
     let query = supabase
       .from('payment_sends')
@@ -1893,13 +1899,19 @@ app.get('/api/payment-sends',
         hint: error.hint
       });
       
-      // If table doesn't exist, return empty array instead of error
-      if (error.code === '42P01' || error.message?.includes('does not exist')) {
-        console.log('[PaymentSendsAPI] Payment sends table does not exist yet. Returning empty array.');
+      // If table doesn't exist or RLS policy blocks access, return empty array instead of error
+      if (error.code === '42P01' || 
+          error.message?.includes('does not exist') ||
+          error.code === 'PGRST301' || // RLS policy violation
+          error.message?.includes('permission denied') ||
+          error.message?.includes('row-level security')) {
+        console.log('[PaymentSendsAPI] Table access issue. Returning empty array:', error.message);
         return res.json([]);
       }
       
-      throw error;
+      // For other errors, log and return empty array to prevent frontend breakage
+      console.error('[PaymentSendsAPI] Query failed, returning empty array:', error.message);
+      return res.json([]);
     }
 
     console.log('[PaymentSendsAPI] Found payment sends:', data?.length || 0, data);
