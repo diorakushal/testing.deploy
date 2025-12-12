@@ -31,7 +31,7 @@ export default function VerifyOtpPage() {
   const [preferredWalletsComplete, setPreferredWalletsComplete] = useState(false);
   const [walletConfirmed, setWalletConfirmed] = useState(false); // Track if user explicitly confirmed wallet
   const [userClickedConnect, setUserClickedConnect] = useState(false); // Track if user clicked Connect Wallet button
-  const [wasConnectedBeforeClick, setWasConnectedBeforeClick] = useState(false); // Track if wallet was connected before user clicked button
+  const wasConnectedBeforeClickRef = useRef<boolean>(false); // Track if wallet was connected before user clicked button
   
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   
@@ -436,7 +436,7 @@ export default function VerifyOtpPage() {
                       <button
                         onClick={() => {
                           // Remember if wallet was already connected before user clicked
-                          setWasConnectedBeforeClick(isConnected);
+                          wasConnectedBeforeClickRef.current = isConnected;
                           setUserClickedConnect(true);
                           if (openConnectModal) {
                             openConnectModal();
@@ -449,8 +449,11 @@ export default function VerifyOtpPage() {
                         Connect Wallet
                       </button>
                     </div>
-                    {/* Only show Continue button if user clicked Connect AND wallet is now connected */}
-                    {userClickedConnect && isConnected && address && (
+                    {/* Only show Continue button if:
+                        1. User clicked Connect Wallet
+                        2. Wallet is now connected
+                        3. Connection happened AFTER clicking (not before) */}
+                    {userClickedConnect && isConnected && address && !wasConnectedBeforeClickRef.current && (
                       <div className="mt-4">
                         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
                           <p className="text-sm text-gray-700 mb-1">Wallet connected:</p>
@@ -464,6 +467,16 @@ export default function VerifyOtpPage() {
                         >
                           Continue
                         </button>
+                      </div>
+                    )}
+                    {/* If wallet was already connected before clicking, show message to disconnect and reconnect */}
+                    {userClickedConnect && isConnected && wasConnectedBeforeClickRef.current && (
+                      <div className="mt-4">
+                        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                          <p className="text-sm text-yellow-800 mb-2">
+                            A wallet is already connected. Please disconnect it first, then click "Connect Wallet" to connect through the modal.
+                          </p>
+                        </div>
                       </div>
                     )}
                   </>
