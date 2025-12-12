@@ -306,41 +306,39 @@ export default function VerifyOtpPage() {
   useEffect(() => {
     if (type === 'login') return; // Skip onboarding for login
     if (status === 'onboarding' && showWalletConnect && !isConnected && !walletConnected) {
-      // Small delay to ensure UI is ready and RainbowKit is initialized
-      const timer = setTimeout(() => {
+      console.log('[VerifyOTP] Onboarding started, attempting to open wallet connect modal', {
+        openConnectModal: !!openConnectModal,
+        isConnected,
+        walletConnected
+      });
+      
+      // Function to attempt opening the modal
+      const attemptOpenModal = (attemptNumber: number) => {
         if (openConnectModal) {
-          console.log('[VerifyOTP] Auto-opening wallet connect modal');
+          console.log(`[VerifyOTP] Attempt ${attemptNumber}: Opening wallet connect modal`);
           try {
             openConnectModal();
           } catch (error) {
-            console.error('[VerifyOTP] Error opening connect modal:', error);
-            // Retry after a bit more time if modal fails to open
-            setTimeout(() => {
-              if (openConnectModal) {
-                console.log('[VerifyOTP] Retrying to open wallet connect modal');
-                try {
-                  openConnectModal();
-                } catch (retryError) {
-                  console.error('[VerifyOTP] Retry failed:', retryError);
-                }
-              }
-            }, 1000);
+            console.error(`[VerifyOTP] Attempt ${attemptNumber} failed:`, error);
+            // Retry if first attempt fails
+            if (attemptNumber === 1) {
+              setTimeout(() => attemptOpenModal(2), 1000);
+            }
           }
         } else {
-          console.warn('[VerifyOTP] openConnectModal not available yet, retrying...');
-          // Retry after a bit more time if modal isn't ready
-          setTimeout(() => {
-            if (openConnectModal) {
-              console.log('[VerifyOTP] Retrying to open wallet connect modal');
-              try {
-                openConnectModal();
-              } catch (error) {
-                console.error('[VerifyOTP] Retry failed:', error);
-              }
-            }
-          }, 1000);
+          console.warn(`[VerifyOTP] Attempt ${attemptNumber}: openConnectModal not available yet`);
+          // Retry if modal isn't ready
+          if (attemptNumber < 3) {
+            setTimeout(() => attemptOpenModal(attemptNumber + 1), 1000);
+          }
         }
-      }, 800); // Increased delay to ensure RainbowKit is ready
+      };
+      
+      // Initial attempt after delay to ensure RainbowKit is initialized
+      const timer = setTimeout(() => {
+        attemptOpenModal(1);
+      }, 1000); // Increased delay to ensure RainbowKit is fully ready
+      
       return () => clearTimeout(timer);
     }
   }, [status, showWalletConnect, isConnected, walletConnected, openConnectModal, type]);
