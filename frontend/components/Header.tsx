@@ -241,11 +241,13 @@ export default function Header({ onWalletConnect }: HeaderProps) {
           });
           
           // Silently fetch profile from database in background (non-blocking, no errors)
-          supabase
-            .from('users')
-            .select('first_name, last_name, username, profile_image_url')
-            .eq('id', session.user.id)
-            .single()
+          Promise.resolve(
+            supabase
+              .from('users')
+              .select('first_name, last_name, username, profile_image_url')
+              .eq('id', session.user.id)
+              .single()
+          )
             .then(({ data: profile, error }) => {
               if (!error && profile) {
                 setUserProfile(profile);
@@ -292,11 +294,13 @@ export default function Header({ onWalletConnect }: HeaderProps) {
         });
         
         // Silently fetch profile from database in background (non-blocking, no errors)
-        supabase
-          .from('users')
-          .select('first_name, last_name, username, profile_image_url')
-          .eq('id', session.user.id)
-          .single()
+        Promise.resolve(
+          supabase
+            .from('users')
+            .select('first_name, last_name, username, profile_image_url')
+            .eq('id', session.user.id)
+            .single()
+        )
           .then(({ data: profile, error }) => {
             if (!error && profile) {
               setUserProfile(profile);
