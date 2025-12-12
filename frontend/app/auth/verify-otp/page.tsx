@@ -310,14 +310,33 @@ export default function VerifyOtpPage() {
       const timer = setTimeout(() => {
         if (openConnectModal) {
           console.log('[VerifyOTP] Auto-opening wallet connect modal');
-          openConnectModal();
+          try {
+            openConnectModal();
+          } catch (error) {
+            console.error('[VerifyOTP] Error opening connect modal:', error);
+            // Retry after a bit more time if modal fails to open
+            setTimeout(() => {
+              if (openConnectModal) {
+                console.log('[VerifyOTP] Retrying to open wallet connect modal');
+                try {
+                  openConnectModal();
+                } catch (retryError) {
+                  console.error('[VerifyOTP] Retry failed:', retryError);
+                }
+              }
+            }, 1000);
+          }
         } else {
           console.warn('[VerifyOTP] openConnectModal not available yet, retrying...');
           // Retry after a bit more time if modal isn't ready
           setTimeout(() => {
             if (openConnectModal) {
               console.log('[VerifyOTP] Retrying to open wallet connect modal');
-              openConnectModal();
+              try {
+                openConnectModal();
+              } catch (error) {
+                console.error('[VerifyOTP] Retry failed:', error);
+              }
             }
           }, 1000);
         }
