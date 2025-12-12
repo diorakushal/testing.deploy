@@ -305,13 +305,23 @@ export default function VerifyOtpPage() {
   // This ensures wallet connection happens FIRST before PreferredWalletsModal
   useEffect(() => {
     if (type === 'login') return; // Skip onboarding for login
-    if (status === 'onboarding' && showWalletConnect && !isConnected && !walletConnected && openConnectModal) {
-      // Small delay to ensure UI is ready and user sees the onboarding message
+    if (status === 'onboarding' && showWalletConnect && !isConnected && !walletConnected) {
+      // Small delay to ensure UI is ready and RainbowKit is initialized
       const timer = setTimeout(() => {
         if (openConnectModal) {
+          console.log('[VerifyOTP] Auto-opening wallet connect modal');
           openConnectModal();
+        } else {
+          console.warn('[VerifyOTP] openConnectModal not available yet, retrying...');
+          // Retry after a bit more time if modal isn't ready
+          setTimeout(() => {
+            if (openConnectModal) {
+              console.log('[VerifyOTP] Retrying to open wallet connect modal');
+              openConnectModal();
+            }
+          }, 1000);
         }
-      }, 500);
+      }, 800); // Increased delay to ensure RainbowKit is ready
       return () => clearTimeout(timer);
     }
   }, [status, showWalletConnect, isConnected, walletConnected, openConnectModal, type]);
