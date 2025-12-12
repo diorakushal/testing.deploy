@@ -1847,7 +1847,7 @@ app.get('/api/payment-sends',
   try {
     // Users can only query their own payment sends
     const sender_user_id = req.userId; // Force to authenticated user
-    const { recipient_user_id, status, txHash } = req.query;
+    const { recipient_user_id, status, txHash, sender_address, recipient_address } = req.query;
 
     console.log('[PaymentSendsAPI] Fetching payment sends', { sender_user_id, recipient_user_id, sender_address, recipient_address, status, txHash });
 
