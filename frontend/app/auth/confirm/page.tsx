@@ -21,6 +21,7 @@ export default function ConfirmEmailPage() {
   const [walletConnected, setWalletConnected] = useState(false);
   const [preferredWalletsComplete, setPreferredWalletsComplete] = useState(false);
   const [walletConfirmed, setWalletConfirmed] = useState(false); // Track if user explicitly confirmed wallet
+  const [userClickedConnect, setUserClickedConnect] = useState(false); // Track if user clicked Connect Wallet button
   
   const { address, isConnected } = useAccount();
   const { openConnectModal } = useConnectModal();
@@ -129,17 +130,22 @@ export default function ConfirmEmailPage() {
     verifyEmail();
   }, [router]);
 
-  // Handle wallet connection after user connects via RainbowKit modal
-  // This runs when wallet becomes connected (either newly connected or already connected)
+  // Handle wallet connection ONLY after user clicks "Connect Wallet" and connects via RainbowKit modal
+  // This prevents auto-connecting from browser extensions from bypassing the manual connection step
   useEffect(() => {
-    if (status === 'onboarding' && showWalletConnect && !walletConnected && isConnected && address && userId) {
+    // Only proceed if:
+    // 1. User is in onboarding
+    // 2. User has clicked "Connect Wallet" button (userClickedConnect)
+    // 3. Wallet is now connected (isConnected && address)
+    // 4. Wallet hasn't been saved yet (!walletConnected)
+    if (status === 'onboarding' && showWalletConnect && userClickedConnect && !walletConnected && isConnected && address && userId) {
       const handleWalletConnected = async () => {
         try {
           await updateUserWalletAddress(userId, address);
           setWalletConnected(true);
           setWalletConfirmed(true);
           setShowWalletConnect(false);
-          // Only show PreferredWalletsModal AFTER wallet is connected
+          // Only show PreferredWalletsModal AFTER wallet is connected via manual action
           setTimeout(() => {
             setShowPreferredWallets(true);
           }, 500);
@@ -150,7 +156,7 @@ export default function ConfirmEmailPage() {
       };
       handleWalletConnected();
     }
-  }, [status, showWalletConnect, walletConnected, isConnected, address, userId]);
+  }, [status, showWalletConnect, userClickedConnect, walletConnected, isConnected, address, userId]);
 
   // NO auto-connect - user must manually click "Connect Wallet" button
   // This gives users full control over when to connect their wallet
@@ -227,6 +233,7 @@ export default function ConfirmEmailPage() {
                     <div className="mt-6">
                       <button
                         onClick={() => {
+                          setUserClickedConnect(true); // Mark that user clicked the button
                           if (openConnectModal) {
                             openConnectModal();
                           } else {
