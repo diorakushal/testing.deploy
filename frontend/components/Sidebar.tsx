@@ -41,113 +41,84 @@ export default function Sidebar({ onWalletConnect }: SidebarProps) {
     },
   });
 
-  // Get wallet name from connector and window.ethereum
+  // Get wallet name dynamically from connector and window.ethereum
   const getWalletName = () => {
     if (!connector) return 'Wallet';
     
-    // First, try to detect wallet from window.ethereum properties (most reliable)
+    // First, try to get wallet name from window.ethereum properties (most reliable)
     if (typeof window !== 'undefined' && window.ethereum) {
       const ethereum = window.ethereum as any;
       
-      // Check for specific wallet indicators
-      if (ethereum.isMetaMask) {
-        return 'MetaMask';
-      }
-      if (ethereum.isCoinbaseWallet) {
-        return 'Coinbase Wallet';
-      }
-      if (ethereum.isPhantom) {
-        return 'Phantom';
-      }
-      if (ethereum.isTrust) {
-        return 'Trust Wallet';
-      }
-      if (ethereum.isBraveWallet) {
-        return 'Brave Wallet';
-      }
-      if (ethereum.isOKExWallet) {
-        return 'OKX Wallet';
-      }
-      if (ethereum.isBinance) {
-        return 'Binance Wallet';
+      // Check for wallet-specific properties dynamically
+      // Look for properties like isMetaMask, isCoinbaseWallet, isPhantom, etc.
+      const walletProperties = Object.keys(ethereum).filter(key => 
+        key.startsWith('is') && typeof ethereum[key] === 'boolean' && ethereum[key] === true
+      );
+      
+      if (walletProperties.length > 0) {
+        // Extract wallet name from property (e.g., "isMetaMask" -> "MetaMask")
+        const propertyName = walletProperties[0];
+        const walletName = propertyName
+          .replace(/^is/, '') // Remove "is" prefix
+          .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+          .trim();
+        
+        if (walletName) {
+          return walletName;
+        }
       }
       
-      // Check provider name/constructor name
+      // Check for providerName property
       if (ethereum.providerName) {
-        const providerName = ethereum.providerName.toLowerCase();
-        if (providerName.includes('metamask')) return 'MetaMask';
-        if (providerName.includes('coinbase')) return 'Coinbase Wallet';
-        if (providerName.includes('phantom')) return 'Phantom';
-        if (providerName.includes('trust')) return 'Trust Wallet';
+        return formatWalletName(ethereum.providerName);
       }
       
       // Check constructor name
-      if (ethereum.constructor?.name) {
-        const constructorName = ethereum.constructor.name.toLowerCase();
-        if (constructorName.includes('metamask')) return 'MetaMask';
-        if (constructorName.includes('coinbase')) return 'Coinbase Wallet';
-        if (constructorName.includes('phantom')) return 'Phantom';
-        if (constructorName.includes('trust')) return 'Trust Wallet';
+      if (ethereum.constructor?.name && ethereum.constructor.name !== 'Object') {
+        return formatWalletName(ethereum.constructor.name);
+      }
+      
+      // Check for wallet name in various properties
+      if (ethereum.walletName) {
+        return formatWalletName(ethereum.walletName);
+      }
+      
+      if (ethereum.name) {
+        return formatWalletName(ethereum.name);
       }
     }
     
-    // Fallback to connector name/id
+    // Use connector's actual name/id (wagmi/RainbowKit provides the real wallet name)
     const connectorName = connector.name || connector.id || 'Wallet';
     
-    const walletNameMap: { [key: string]: string } = {
-      'MetaMask': 'MetaMask',
-      'io.metamask': 'MetaMask',
-      'metamask': 'MetaMask',
-      'WalletConnect': 'WalletConnect',
-      'Coinbase Wallet': 'Coinbase Wallet',
-      'Coinbase': 'Coinbase Wallet',
-      'coinbase': 'Coinbase Wallet',
-      'Trust Wallet': 'Trust Wallet',
-      'trust': 'Trust Wallet',
-      'Phantom': 'Phantom',
-      'phantom': 'Phantom',
-      'Rainbow': 'Rainbow',
-      'rainbow': 'Rainbow',
-      'Zerion': 'Zerion',
-      'zerion': 'Zerion',
-      'Brave Wallet': 'Brave Wallet',
-      'brave': 'Brave Wallet',
-      'OKX Wallet': 'OKX Wallet',
-      'okx': 'OKX Wallet',
-      'Binance Wallet': 'Binance Wallet',
-      'binance': 'Binance Wallet',
-      'Browser Wallet': 'Browser Wallet', // Generic fallback
-      'Injected': 'Browser Wallet',
-    };
-    
-    // Check exact match first
-    if (walletNameMap[connectorName]) {
-      return walletNameMap[connectorName];
+    // Format the name nicely but preserve the actual wallet name
+    return formatWalletName(connectorName);
+  };
+  
+  // Helper function to format wallet names nicely
+  const formatWalletName = (name: string): string => {
+    if (!name || name === 'Wallet' || name === 'Injected') {
+      return 'Browser Wallet';
     }
     
-    // Check case-insensitive match
-    const lowerName = connectorName.toLowerCase();
-    for (const [key, value] of Object.entries(walletNameMap)) {
-      if (key.toLowerCase() === lowerName) {
-        return value;
-      }
-    }
+    // Remove common prefixes/suffixes
+    let formatted = name
+      .replace(/^io\./, '') // Remove "io." prefix
+      .replace(/\.wallet$/i, '') // Remove ".wallet" suffix
+      .replace(/wallet$/i, '') // Remove "wallet" suffix
+      .trim();
     
-    // Check if name contains wallet identifier
-    if (lowerName.includes('metamask')) return 'MetaMask';
-    if (lowerName.includes('coinbase')) return 'Coinbase Wallet';
-    if (lowerName.includes('phantom')) return 'Phantom';
-    if (lowerName.includes('trust')) return 'Trust Wallet';
-    if (lowerName.includes('rainbow')) return 'Rainbow';
-    if (lowerName.includes('brave')) return 'Brave Wallet';
-    if (lowerName.includes('okx') || lowerName.includes('okex')) return 'OKX Wallet';
-    if (lowerName.includes('binance')) return 'Binance Wallet';
-    
-    // Format the connector name nicely as fallback
-    return connectorName
-      .split(/[\s-]/)
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    // Format: capitalize first letter of each word, handle camelCase
+    formatted = formatted
+      .replace(/([a-z])([A-Z])/g, '$1 $2') // Add space before capital letters in camelCase
+      .split(/[\s-_.]+/) // Split on spaces, hyphens, underscores, dots
+      .map(word => {
+        // Capitalize first letter, lowercase the rest
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
       .join(' ');
+    
+    return formatted || 'Browser Wallet';
   };
 
   const walletName = getWalletName();
