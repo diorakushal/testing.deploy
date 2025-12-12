@@ -7,6 +7,7 @@ import UserAvatar from '@/components/UserAvatar';
 import { getUserDisplayName } from '@/lib/userAvatar';
 import toast from 'react-hot-toast';
 import axios from 'axios';
+import { api } from '@/lib/api-client';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -52,8 +53,12 @@ export default function UserProfileModal({ isOpen, onClose, user, currentUserId 
       }
 
       try {
-        const response = await axios.get(`${API_URL}/contacts?userId=${currentUserId}`);
-        const contacts = response.data || [];
+        // Use authenticated API client
+        const response = await api.get('/contacts', {
+          params: { userId: currentUserId }
+        });
+        // api.get() returns data directly
+        const contacts = Array.isArray(response) ? response : [];
         const foundContact = contacts.find((contact: any) => contact.contact_user_id === user.id);
         if (foundContact) {
           setIsContact(true);

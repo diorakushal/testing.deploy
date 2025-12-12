@@ -10,6 +10,7 @@ import { AVAILABLE_CHAINS, getChainConfig, isEVMChain } from '@/lib/tokenConfig'
 import toast from 'react-hot-toast';
 import axios from 'axios';
 import UserAvatar from '@/components/UserAvatar';
+import { api } from '@/lib/api-client';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -144,8 +145,12 @@ export default function SettingsPage() {
 
   const fetchContacts = async (userId: string) => {
     try {
-      const response = await axios.get(`${API_URL}/contacts?userId=${userId}`);
-      setContacts(response.data || []);
+      // Use authenticated API client
+      const response = await api.get('/contacts', {
+        params: { userId }
+      });
+      // api.get() returns data directly
+      setContacts(Array.isArray(response) ? response : []);
     } catch (error: any) {
       console.error('Error fetching contacts:', error);
       const errorMessage = error.response?.data?.error || error.message || 'Failed to load contacts';

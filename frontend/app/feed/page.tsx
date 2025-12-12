@@ -265,28 +265,33 @@ export default function Feed() {
         // Fetch both and combine them
         console.log('Fetching payment requests FROM and TO user:', userId);
         
+        // Use authenticated API client
         const [fromUser, toUser] = await Promise.all([
-          axios.get(`${API_URL}/payment-requests`, {
+          api.get('/payment-requests', {
             params: { requester_user_id: userId },
             timeout: 10000
           }).catch((err) => {
             console.error('Error fetching requests FROM user:', err);
-            return { data: [] };
+            return [];
           }),
-          axios.get(`${API_URL}/payment-requests`, {
+          api.get('/payment-requests', {
             params: { recipient_user_id: userId },
             timeout: 10000
           }).catch((err) => {
             console.error('Error fetching requests TO user:', err);
-            return { data: [] };
+            return [];
           })
         ]);
         
-        console.log('Requests FROM user:', fromUser.data?.length || 0, fromUser.data);
-        console.log('Requests TO user:', toUser.data?.length || 0, toUser.data);
+        // api.get() returns data directly, not { data: ... }
+        const fromUserData = Array.isArray(fromUser) ? fromUser : [];
+        const toUserData = Array.isArray(toUser) ? toUser : [];
+        
+        console.log('Requests FROM user:', fromUserData?.length || 0, fromUserData);
+        console.log('Requests TO user:', toUserData?.length || 0, toUserData);
         
         // Combine and deduplicate by ID
-        const allRequests = [...(fromUser.data || []), ...(toUser.data || [])];
+        const allRequests = [...(fromUserData || []), ...(toUserData || [])];
         const uniqueRequests = Array.from(
           new Map(allRequests.map((r: PaymentRequest) => [r.id, r])).values()
         );
@@ -310,12 +315,14 @@ export default function Feed() {
       } else {
         // No user ID - fetch all (shouldn't happen if authenticated)
         console.log('No user ID, fetching all payment requests');
-        const response = await axios.get(`${API_URL}/payment-requests`, {
+        const response = await api.get('/payment-requests', {
           timeout: 5000
         });
         
-        if (response.data && response.data.length > 0) {
-          const sortedRequests = response.data.sort((a: PaymentRequest, b: PaymentRequest) => {
+        // api.get() returns data directly
+        const requestsData = Array.isArray(response) ? response : [];
+        if (requestsData.length > 0) {
+          const sortedRequests = requestsData.sort((a: PaymentRequest, b: PaymentRequest) => {
             if (a.status === 'open' && b.status !== 'open') return -1;
             if (a.status !== 'open' && b.status === 'open') return 1;
             return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -642,8 +649,12 @@ export default function Feed() {
   // Fetch contacts for nickname lookup
   const fetchContacts = useCallback(async (userId: string) => {
     try {
-      const response = await axios.get(`${API_URL}/contacts?userId=${userId}`);
-      setContacts(response.data || []);
+      // Use authenticated API client
+      const response = await api.get('/contacts', {
+        params: { userId }
+      });
+      // api.get() returns data directly
+      setContacts(Array.isArray(response) ? response : []);
     } catch (error: any) {
       console.error('Error fetching contacts:', error);
       // Don't show error toast - contacts are optional

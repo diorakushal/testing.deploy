@@ -103,8 +103,12 @@ export default function UserProfilePage() {
           // Check if current user has this user as a contact
           if (currentUserId && currentUserId !== foundUser.id) {
             try {
-              const contactsResponse = await axios.get(`${API_URL}/contacts?userId=${currentUserId}`);
-              const contacts = contactsResponse.data || [];
+              // Use authenticated API client
+              const contactsResponse = await api.get('/contacts', {
+                params: { userId: currentUserId }
+              });
+              // api.get() returns data directly
+              const contacts = Array.isArray(contactsResponse) ? contactsResponse : [];
               const foundContact = contacts.find((contact: any) => contact.contact_user_id === foundUser.id);
               if (foundContact) {
                 setIsContact(true);
