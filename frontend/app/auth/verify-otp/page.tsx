@@ -29,14 +29,34 @@ export default function VerifyOtpPage() {
   const [showPreferredWallets, setShowPreferredWallets] = useState(false);
   const [walletConnected, setWalletConnected] = useState(false);
   const [preferredWalletsComplete, setPreferredWalletsComplete] = useState(false);
-  const [walletConfirmed, setWalletConfirmed] = useState(false); // Track if user explicitly confirmed wallet
   const [userClickedConnect, setUserClickedConnect] = useState(false); // Track if user clicked Connect Wallet button
-  const wasConnectedBeforeClickRef = useRef<boolean>(false); // Track if wallet was connected before user clicked button
+  const [connectedAfterClick, setConnectedAfterClick] = useState(false); // Track if wallet connected AFTER user clicked button
+  const wasConnectedBeforeClickRef = useRef<boolean>(false); // Track connection state at moment of click
   
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
   
   const { address, isConnected } = useAccount();
   const { openConnectModal } = useConnectModal();
+  
+  // Track wallet connection ONLY after user clicks "Connect Wallet"
+  // This ensures we only proceed with manually connected wallets (not pre-existing connections)
+  useEffect(() => {
+    if (!userClickedConnect) {
+      // User hasn't clicked yet - don't track anything
+      return;
+    }
+    
+    // User has clicked - now track if wallet becomes connected
+    if (isConnected && address) {
+      // Only set connectedAfterClick if wallet was NOT connected before click
+      if (!wasConnectedBeforeClickRef.current) {
+        setConnectedAfterClick(true);
+      }
+    } else {
+      // Wallet disconnected - reset
+      setConnectedAfterClick(false);
+    }
+  }, [userClickedConnect, isConnected, address]);
 
   // Auto-focus first input on mount
   useEffect(() => {
@@ -291,7 +311,6 @@ export default function VerifyOtpPage() {
     try {
       await updateUserWalletAddress(userId, address);
       setWalletConnected(true);
-      setWalletConfirmed(true);
       setShowWalletConnect(false);
       // Show PreferredWalletsModal after user explicitly continues
       setTimeout(() => {
@@ -302,9 +321,6 @@ export default function VerifyOtpPage() {
       toast.error('Failed to save wallet address. Please try again.');
     }
   };
-
-  // NO auto-connect - user must manually click "Connect Wallet" button
-  // This gives users full control over when to connect their wallet
 
   const handlePreferredWalletsClose = async () => {
     if (!userId) return;
@@ -435,9 +451,12 @@ export default function VerifyOtpPage() {
                     <div className="mt-6">
                       <button
                         onClick={() => {
-                          // Remember if wallet was already connected before user clicked
+                          // Remember connection state at moment of click
                           wasConnectedBeforeClickRef.current = isConnected;
+                          // Mark that user initiated wallet connection
                           setUserClickedConnect(true);
+                          // Reset connectedAfterClick - will be set by useEffect if connection happens after click
+                          setConnectedAfterClick(false);
                           
                           // Open the RainbowKit connect modal
                           if (!openConnectModal) {
@@ -461,8 +480,8 @@ export default function VerifyOtpPage() {
                     {/* Only show Continue button if:
                         1. User clicked Connect Wallet
                         2. Wallet is now connected
-                        3. Connection happened AFTER clicking (not before) */}
-                    {userClickedConnect && isConnected && address && !wasConnectedBeforeClickRef.current && (
+                        3. Connection happened AFTER clicking the button */}
+                    {userClickedConnect && connectedAfterClick && isConnected && address && (
                       <div className="mt-4">
                         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
                           <p className="text-sm text-gray-700 mb-1">Wallet connected:</p>
