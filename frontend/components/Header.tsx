@@ -224,7 +224,7 @@ export default function Header({ onWalletConnect }: HeaderProps) {
   };
 
   useEffect(() => {
-    // Check for authenticated user and fetch profile
+    // Simple auth check: if session exists, user is logged in; otherwise not
     const checkUser = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -232,47 +232,44 @@ export default function Header({ onWalletConnect }: HeaderProps) {
           setUser(session.user);
           setCurrentUserId(session.user.id);
           
-          // Fetch user profile from users table (with timeout)
-          try {
-            const profilePromise = supabase
-            .from('users')
-              .select('first_name, last_name, username, profile_image_url')
-            .eq('id', session.user.id)
-            .single();
+          // Use user_metadata immediately (available from session)
+          setUserProfile({
+            first_name: session.user.user_metadata?.first_name || '',
+            last_name: session.user.user_metadata?.last_name || '',
+            username: session.user.user_metadata?.username || '',
+            profile_image_url: session.user.user_metadata?.profile_image_url || null,
+          });
           
-            const profileTimeoutPromise = new Promise((_, reject) => {
-              setTimeout(() => reject(new Error('Profile fetch timeout')), 10000); // Increased to 10s
+          // Silently fetch profile from database in background (non-blocking, no errors)
+          supabase
+            .from('users')
+            .select('first_name, last_name, username, profile_image_url')
+            .eq('id', session.user.id)
+            .single()
+            .then(({ data: profile, error }) => {
+              if (!error && profile) {
+                setUserProfile(profile);
+              }
+            })
+            .catch(() => {
+              // Silently fail - we already have user_metadata
             });
-            
-            const { data: profile, error } = await Promise.race([
-              profilePromise,
-              profileTimeoutPromise
-            ]) as { data: any; error: any };
-            
-          if (!error && profile) {
-            setUserProfile(profile);
-          } else {
-            // Fallback to user_metadata if profile not found
-            setUserProfile({
-              first_name: session.user.user_metadata?.first_name || '',
-              last_name: session.user.user_metadata?.last_name || '',
-              username: session.user.user_metadata?.username || '',
-                profile_image_url: session.user.user_metadata?.profile_image_url || null,
-              });
-            }
-          } catch (profileError) {
-            // On timeout or error, use fallback
-            console.error('[Header] Profile fetch error:', profileError);
-            setUserProfile({
-              first_name: session.user.user_metadata?.first_name || '',
-              last_name: session.user.user_metadata?.last_name || '',
-              username: session.user.user_metadata?.username || '',
-              profile_image_url: session.user.user_metadata?.profile_image_url || null,
-            });
-          }
+          
+          // Ensure user record exists in background (non-blocking)
+          const { ensureUserRecord } = await import('@/lib/auth-utils');
+          ensureUserRecord(session.user).catch(() => {
+            // Silently fail - not critical
+          });
+        } else {
+          setUser(null);
+          setUserProfile(null);
+          setCurrentUserId(null);
         }
       } catch (error) {
         console.error('Error checking user:', error);
+        setUser(null);
+        setUserProfile(null);
+        setCurrentUserId(null);
       } finally {
         setLoading(false);
       }
@@ -280,56 +277,40 @@ export default function Header({ onWalletConnect }: HeaderProps) {
 
     checkUser();
 
-    // Listen for auth changes
+    // Listen for auth changes - simple: session exists = logged in, no session = logged out
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
         setUser(session.user);
         setCurrentUserId(session.user.id);
         
-        // Ensure user record exists in public.users table (non-blocking)
-        const { ensureUserRecord } = await import('@/lib/auth-utils');
-        ensureUserRecord(session.user).catch(err => {
-          console.error('[Header] Background ensureUserRecord failed:', err);
+        // Use user_metadata immediately (available from session)
+        setUserProfile({
+          first_name: session.user.user_metadata?.first_name || '',
+          last_name: session.user.user_metadata?.last_name || '',
+          username: session.user.user_metadata?.username || '',
+          profile_image_url: session.user.user_metadata?.profile_image_url || null,
         });
         
-        // Fetch user profile from users table (with timeout)
-        try {
-          const profilePromise = supabase
+        // Silently fetch profile from database in background (non-blocking, no errors)
+        supabase
           .from('users')
-            .select('first_name, last_name, username, profile_image_url')
+          .select('first_name, last_name, username, profile_image_url')
           .eq('id', session.user.id)
-          .single();
+          .single()
+          .then(({ data: profile, error }) => {
+            if (!error && profile) {
+              setUserProfile(profile);
+            }
+          })
+          .catch(() => {
+            // Silently fail - we already have user_metadata
+          });
         
-          const profileTimeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Profile fetch timeout')), 3000);
-          });
-          
-          const { data: profile, error } = await Promise.race([
-            profilePromise,
-            profileTimeoutPromise
-          ]) as { data: any; error: any };
-          
-        if (!error && profile) {
-          setUserProfile(profile);
-        } else {
-          // Fallback to user_metadata if profile not found
-          setUserProfile({
-            first_name: session.user.user_metadata?.first_name || '',
-            last_name: session.user.user_metadata?.last_name || '',
-            username: session.user.user_metadata?.username || '',
-              profile_image_url: session.user.user_metadata?.profile_image_url || null,
-            });
-          }
-        } catch (profileError) {
-          // On timeout or error, use fallback
-          console.error('[Header] Profile fetch error in onAuthStateChange:', profileError);
-          setUserProfile({
-            first_name: session.user.user_metadata?.first_name || '',
-            last_name: session.user.user_metadata?.last_name || '',
-            username: session.user.user_metadata?.username || '',
-            profile_image_url: session.user.user_metadata?.profile_image_url || null,
-          });
-        }
+        // Ensure user record exists in background (non-blocking)
+        const { ensureUserRecord } = await import('@/lib/auth-utils');
+        ensureUserRecord(session.user).catch(() => {
+          // Silently fail - not critical
+        });
       } else {
         setUser(null);
         setUserProfile(null);
