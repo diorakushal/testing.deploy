@@ -491,7 +491,7 @@ export default function SettingsPage() {
       setAddressError('');
       toast.loading('Saving wallet address...');
       
-      await api.post('/preferred-wallets', {
+      const savedWallet = await api.post('/preferred-wallets', {
         userId: user.id,
         chainId: targetChainId,
         receivingWalletAddress: trimmedAddress
@@ -499,12 +499,6 @@ export default function SettingsPage() {
 
       toast.dismiss();
       toast.success('Wallet address saved!');
-      
-      const savedWallet = await api.post('/preferred-wallets', {
-        userId: user.id,
-        chainId: targetChainId,
-        receivingWalletAddress: trimmedAddress
-      });
       setPreferredWallets(prev => {
         const existing = prev.find(w => {
           const wChainId = typeof w.chain_id === 'string' ? parseInt(w.chain_id) : w.chain_id;
