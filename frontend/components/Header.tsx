@@ -62,31 +62,109 @@ export default function Header({ onWalletConnect }: HeaderProps) {
   });
 
 
-  // Get wallet name from connector
+  // Get wallet name from connector and window.ethereum
   const getWalletName = () => {
     if (!connector) return 'Wallet';
     
-    // Get the connector name and format it nicely
+    // First, try to detect wallet from window.ethereum properties (most reliable)
+    if (typeof window !== 'undefined' && window.ethereum) {
+      const ethereum = window.ethereum as any;
+      
+      // Check for specific wallet indicators
+      if (ethereum.isMetaMask) {
+        return 'MetaMask';
+      }
+      if (ethereum.isCoinbaseWallet) {
+        return 'Coinbase Wallet';
+      }
+      if (ethereum.isPhantom) {
+        return 'Phantom';
+      }
+      if (ethereum.isTrust) {
+        return 'Trust Wallet';
+      }
+      if (ethereum.isBraveWallet) {
+        return 'Brave Wallet';
+      }
+      if (ethereum.isOKExWallet) {
+        return 'OKX Wallet';
+      }
+      if (ethereum.isBinance) {
+        return 'Binance Wallet';
+      }
+      
+      // Check provider name/constructor name
+      if (ethereum.providerName) {
+        const providerName = ethereum.providerName.toLowerCase();
+        if (providerName.includes('metamask')) return 'MetaMask';
+        if (providerName.includes('coinbase')) return 'Coinbase Wallet';
+        if (providerName.includes('phantom')) return 'Phantom';
+        if (providerName.includes('trust')) return 'Trust Wallet';
+      }
+      
+      // Check constructor name
+      if (ethereum.constructor?.name) {
+        const constructorName = ethereum.constructor.name.toLowerCase();
+        if (constructorName.includes('metamask')) return 'MetaMask';
+        if (constructorName.includes('coinbase')) return 'Coinbase Wallet';
+        if (constructorName.includes('phantom')) return 'Phantom';
+        if (constructorName.includes('trust')) return 'Trust Wallet';
+      }
+    }
+    
+    // Fallback to connector name/id
     const connectorName = connector.name || connector.id || 'Wallet';
     
-    // Format common wallet names
     const walletNameMap: { [key: string]: string } = {
       'MetaMask': 'MetaMask',
       'io.metamask': 'MetaMask',
+      'metamask': 'MetaMask',
       'WalletConnect': 'WalletConnect',
       'Coinbase Wallet': 'Coinbase Wallet',
       'Coinbase': 'Coinbase Wallet',
+      'coinbase': 'Coinbase Wallet',
       'Trust Wallet': 'Trust Wallet',
+      'trust': 'Trust Wallet',
+      'Phantom': 'Phantom',
+      'phantom': 'Phantom',
       'Rainbow': 'Rainbow',
+      'rainbow': 'Rainbow',
       'Zerion': 'Zerion',
+      'zerion': 'Zerion',
+      'Brave Wallet': 'Brave Wallet',
+      'brave': 'Brave Wallet',
+      'OKX Wallet': 'OKX Wallet',
+      'okx': 'OKX Wallet',
+      'Binance Wallet': 'Binance Wallet',
+      'binance': 'Binance Wallet',
+      'Browser Wallet': 'Browser Wallet', // Generic fallback
+      'Injected': 'Browser Wallet',
     };
     
-    // Check if we have a mapped name
+    // Check exact match first
     if (walletNameMap[connectorName]) {
       return walletNameMap[connectorName];
     }
     
-    // Otherwise, capitalize the first letter of each word
+    // Check case-insensitive match
+    const lowerName = connectorName.toLowerCase();
+    for (const [key, value] of Object.entries(walletNameMap)) {
+      if (key.toLowerCase() === lowerName) {
+        return value;
+      }
+    }
+    
+    // Check if name contains wallet identifier
+    if (lowerName.includes('metamask')) return 'MetaMask';
+    if (lowerName.includes('coinbase')) return 'Coinbase Wallet';
+    if (lowerName.includes('phantom')) return 'Phantom';
+    if (lowerName.includes('trust')) return 'Trust Wallet';
+    if (lowerName.includes('rainbow')) return 'Rainbow';
+    if (lowerName.includes('brave')) return 'Brave Wallet';
+    if (lowerName.includes('okx') || lowerName.includes('okex')) return 'OKX Wallet';
+    if (lowerName.includes('binance')) return 'Binance Wallet';
+    
+    // Format the connector name nicely as fallback
     return connectorName
       .split(/[\s-]/)
       .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
