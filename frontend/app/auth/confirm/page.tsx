@@ -9,6 +9,7 @@ import { useConnectModal } from '@rainbow-me/rainbowkit';
 import PreferredWalletsModal from '@/components/PreferredWalletsModal';
 import { updateUserWalletAddress } from '@/lib/auth-utils';
 import { api } from '@/lib/api-client';
+import toast from 'react-hot-toast';
 
 export default function ConfirmEmailPage() {
   const router = useRouter();
