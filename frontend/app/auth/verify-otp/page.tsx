@@ -279,29 +279,29 @@ export default function VerifyOtpPage() {
     }
   };
 
-  // Handle wallet connection during onboarding (only for signup, not login)
-  // IMPORTANT: User must EXPLICITLY confirm wallet connection, even if already connected
-  // This prevents auto-connecting from browser extensions from bypassing the onboarding step
-  const handleConfirmWallet = async () => {
-    if (!isConnected || !address || !userId) {
-      toast.error('Please connect a wallet first');
-      return;
+  // Handle wallet connection after user connects via RainbowKit modal
+  // This runs when wallet becomes connected (either newly connected or already connected)
+  useEffect(() => {
+    if (type === 'login') return; // Skip onboarding for login
+    if (status === 'onboarding' && showWalletConnect && !walletConnected && isConnected && address && userId) {
+      const handleWalletConnected = async () => {
+        try {
+          await updateUserWalletAddress(userId, address);
+          setWalletConnected(true);
+          setWalletConfirmed(true);
+          setShowWalletConnect(false);
+          // Only show PreferredWalletsModal AFTER wallet is connected
+          setTimeout(() => {
+            setShowPreferredWallets(true);
+          }, 500);
+        } catch (error) {
+          console.error('Error updating wallet address:', error);
+          toast.error('Failed to save wallet address. Please try again.');
+        }
+      };
+      handleWalletConnected();
     }
-
-    try {
-      await updateUserWalletAddress(userId, address);
-      setWalletConnected(true);
-      setWalletConfirmed(true);
-      setShowWalletConnect(false);
-      // Only show PreferredWalletsModal AFTER wallet is explicitly confirmed
-      setTimeout(() => {
-        setShowPreferredWallets(true);
-      }, 500);
-    } catch (error) {
-      console.error('Error updating wallet address:', error);
-      toast.error('Failed to save wallet address. Please try again.');
-    }
-  };
+  }, [status, showWalletConnect, walletConnected, isConnected, address, userId, type]);
 
   // NO auto-connect - user must manually click "Connect Wallet" button
   // This gives users full control over when to connect their wallet
@@ -432,49 +432,20 @@ export default function VerifyOtpPage() {
                     <p className="text-gray-500 text-xs mb-6">
                       Connect your wallets for each chain where you want to receive payments. You can either connect your wallet or manually enter a wallet address. When someone sends you a payment, they'll see your preferred wallet addresses for the chains you've configured.
                     </p>
-                    {!isConnected ? (
-                      <div className="mt-6">
-                        <button
-                          onClick={() => {
-                            if (openConnectModal) {
-                              openConnectModal();
-                            } else {
-                              toast.error('Wallet connection not available. Please refresh the page.');
-                            }
-                          }}
-                          className="w-full px-4 py-3 bg-black text-white rounded-full hover:bg-gray-900 active:scale-[0.98] transition-all duration-200 font-medium"
-                        >
-                          Connect Wallet
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="mt-6">
-                        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
-                          <p className="text-sm text-gray-700 mb-2">
-                            Wallet detected:
-                          </p>
-                          <p className="text-sm font-mono text-black">
-                            {address?.slice(0, 6)}...{address?.slice(-4)}
-                          </p>
-                        </div>
-                        <button
-                          onClick={handleConfirmWallet}
-                          className="w-full px-4 py-3 bg-black text-white rounded-full hover:bg-gray-900 active:scale-[0.98] transition-all duration-200 font-medium"
-                        >
-                          Confirm & Continue
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (openConnectModal) {
-                              openConnectModal();
-                            }
-                          }}
-                          className="w-full px-4 py-3 mt-3 border border-gray-300 text-black rounded-full hover:bg-gray-50 active:scale-[0.98] transition-all duration-200 font-medium"
-                        >
-                          Connect Different Wallet
-                        </button>
-                      </div>
-                    )}
+                    <div className="mt-6">
+                      <button
+                        onClick={() => {
+                          if (openConnectModal) {
+                            openConnectModal();
+                          } else {
+                            toast.error('Wallet connection not available. Please refresh the page.');
+                          }
+                        }}
+                        className="w-full px-4 py-3 bg-black text-white rounded-full hover:bg-gray-900 active:scale-[0.98] transition-all duration-200 font-medium"
+                      >
+                        Connect Wallet
+                      </button>
+                    </div>
                   </>
                 )}
                 {walletConnected && !preferredWalletsComplete && (
