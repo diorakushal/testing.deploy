@@ -8,6 +8,7 @@ import { getUserDisplayName } from '@/lib/userAvatar';
 import toast from 'react-hot-toast';
 import axios from 'axios';
 import Link from 'next/link';
+import { api } from '@/lib/api-client';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -138,30 +139,32 @@ export default function UserProfilePage() {
       setLoadingTransactions(true);
       try {
         // Fetch payment sends between current user and profile user
+        // Use authenticated API client to include auth headers
         const [sendsFromMe, sendsToMe, requestsResponse] = await Promise.all([
-          axios.get(`${API_URL}/payment-sends`, {
+          api.get('/payment-sends', {
             params: {
               sender_user_id: currentUserId,
               recipient_user_id: user.id,
             },
             timeout: 10000
-          }).catch(() => ({ data: [] })),
-          axios.get(`${API_URL}/payment-sends`, {
+          }).catch(() => []),
+          api.get('/payment-sends', {
             params: {
               sender_user_id: user.id,
               recipient_user_id: currentUserId,
             },
             timeout: 10000
-          }).catch(() => ({ data: [] })),
+          }).catch(() => []),
           axios.get(`${API_URL}/payment-requests`, {
             params: { userId: currentUserId },
             timeout: 10000
           }).catch(() => ({ data: [] })),
         ]);
 
+        // api.get() returns data directly, not { data: ... }
         const allSends = [
-          ...(sendsFromMe.data || []),
-          ...(sendsToMe.data || []),
+          ...(Array.isArray(sendsFromMe) ? sendsFromMe : []),
+          ...(Array.isArray(sendsToMe) ? sendsToMe : []),
         ];
 
         // Filter payment requests between these two users

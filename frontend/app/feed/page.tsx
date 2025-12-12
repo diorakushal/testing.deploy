@@ -32,6 +32,7 @@ import PaymentRequestCard from '@/components/PaymentRequestCard';
 import PaymentSendCard from '@/components/PaymentSendCard';
 import { supabase } from '@/lib/supabase';
 import { useAccount } from 'wagmi';
+import { api } from '@/lib/api-client';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -155,57 +156,59 @@ export default function Feed() {
 
       // Fetch sends where user is sender OR recipient
       // Only fetch by wallet address if it's actually stored in the user's profile
+      // Use authenticated API client to include auth headers
       const fetchPromises = [
-        axios.get(`${API_URL}/payment-sends`, {
+        api.get('/payment-sends', {
           params: { sender_user_id: userId },
           timeout: 10000
         }).catch((err) => {
           console.error('[Feed] Error fetching sends FROM user (by ID):', err);
-          return { data: [] };
+          return [];
         }),
-        axios.get(`${API_URL}/payment-sends`, {
+        api.get('/payment-sends', {
           params: { recipient_user_id: userId },
           timeout: 10000
         }).catch((err) => {
           console.error('[Feed] Error fetching sends TO user (by ID):', err);
-          return { data: [] };
+          return [];
         })
       ];
 
       // Only add wallet address queries if wallet is actually associated with this user
       if (walletAddress) {
         fetchPromises.push(
-          axios.get(`${API_URL}/payment-sends`, {
+          api.get('/payment-sends', {
             params: { sender_address: walletAddress },
             timeout: 10000
           }).catch((err) => {
             console.error('[Feed] Error fetching sends FROM user (by address):', err);
-            return { data: [] };
+            return [];
           }),
-          axios.get(`${API_URL}/payment-sends`, {
+          api.get('/payment-sends', {
             params: { recipient_address: walletAddress },
             timeout: 10000
           }).catch((err) => {
             console.error('[Feed] Error fetching sends TO user (by address):', err);
-            return { data: [] };
+            return [];
           })
         );
       }
 
       const results = await Promise.all(fetchPromises);
-      const fromUser = results[0];
-      const toUser = results[1];
-      const fromAddress = results[2] || { data: [] };
-      const toAddress = results[3] || { data: [] };
+      // api.get() returns data directly, not { data: ... }
+      const fromUser = Array.isArray(results[0]) ? results[0] : [];
+      const toUser = Array.isArray(results[1]) ? results[1] : [];
+      const fromAddress = (Array.isArray(results[2]) ? results[2] : []);
+      const toAddress = (Array.isArray(results[3]) ? results[3] : []);
 
-      console.log('[Feed] Payment sends FROM user (by ID):', fromUser.data?.length || 0, fromUser.data);
-      console.log('[Feed] Payment sends TO user (by ID):', toUser.data?.length || 0, toUser.data);
+      console.log('[Feed] Payment sends FROM user (by ID):', fromUser?.length || 0, fromUser);
+      console.log('[Feed] Payment sends TO user (by ID):', toUser?.length || 0, toUser);
       if (walletAddress) {
-        console.log('[Feed] Payment sends FROM user (by address):', fromAddress.data?.length || 0, fromAddress.data);
-        console.log('[Feed] Payment sends TO user (by address):', toAddress.data?.length || 0, toAddress.data);
+        console.log('[Feed] Payment sends FROM user (by address):', fromAddress?.length || 0, fromAddress);
+        console.log('[Feed] Payment sends TO user (by address):', toAddress?.length || 0, toAddress);
       }
 
-      const allSends = [...(fromUser.data || []), ...(toUser.data || []), ...(fromAddress.data || []), ...(toAddress.data || [])];
+      const allSends = [...(fromUser || []), ...(toUser || []), ...(fromAddress || []), ...(toAddress || [])];
       const uniqueSends = Array.from(
         new Map(allSends.map((s: PaymentSend) => [s.id, s])).values()
       );
