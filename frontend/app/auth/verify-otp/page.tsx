@@ -301,17 +301,8 @@ export default function VerifyOtpPage() {
     }
   }, [status, showWalletConnect, walletConnected, isConnected, address, userId, type]);
 
-  // Open wallet connect modal when onboarding starts (only for signup, not login)
-  // This ensures wallet connection happens FIRST before PreferredWalletsModal
-  useEffect(() => {
-    if (type === 'login') return; // Skip onboarding for login
-    if (status === 'onboarding' && showWalletConnect && !isConnected && !walletConnected && openConnectModal) {
-      // Small delay to ensure UI is ready
-      setTimeout(() => {
-        openConnectModal();
-      }, 300);
-    }
-  }, [status, showWalletConnect, isConnected, walletConnected, openConnectModal, type]);
+  // Don't auto-open wallet connect modal - let user click the button
+  // This gives them control and makes the flow clearer
 
   const handlePreferredWalletsClose = async () => {
     if (!userId) return;
@@ -433,17 +424,31 @@ export default function VerifyOtpPage() {
                 <h1 className="text-3xl font-bold text-black mb-2">Email verified!</h1>
                 {!walletConnected && (
                   <>
-                    <p className="text-gray-600 text-sm mt-2 mb-6">
-                      To get started, please connect your wallet first. This is required before you can set up your preferred wallets.
+                    <p className="text-gray-600 text-sm mt-2 mb-4">
+                      Before setting up your preferred wallets, please connect your wallet first.
+                    </p>
+                    <p className="text-gray-500 text-xs mb-6">
+                      Connect your wallets for each chain where you want to receive payments. You can either connect your wallet or manually enter a wallet address. When someone sends you a payment, they'll see your preferred wallet addresses for the chains you've configured.
                     </p>
                     <div className="mt-6">
                       <button
-                        onClick={() => openConnectModal?.()}
+                        onClick={() => {
+                          if (openConnectModal) {
+                            openConnectModal();
+                          } else {
+                            toast.error('Wallet connection not available. Please refresh the page.');
+                          }
+                        }}
                         className="w-full px-4 py-3 bg-black text-white rounded-full hover:bg-gray-900 active:scale-[0.98] transition-all duration-200 font-medium"
                       >
                         Connect Wallet
                       </button>
                     </div>
+                    {isConnected && address && (
+                      <p className="text-xs text-gray-500 mt-3 text-center">
+                        Wallet detected: {address.slice(0, 6)}...{address.slice(-4)}
+                      </p>
+                    )}
                   </>
                 )}
                 {walletConnected && !preferredWalletsComplete && (
