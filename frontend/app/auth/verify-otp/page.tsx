@@ -9,9 +9,7 @@ import { useAccount } from 'wagmi';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import PreferredWalletsModal from '@/components/PreferredWalletsModal';
 import { updateUserWalletAddress } from '@/lib/auth-utils';
-import axios from 'axios';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+import { api } from '@/lib/api-client';
 
 export default function VerifyOtpPage() {
   const router = useRouter();
@@ -319,8 +317,10 @@ export default function VerifyOtpPage() {
     if (!userId) return;
     
     try {
-      const response = await axios.get(`${API_URL}/preferred-wallets?userId=${userId}`);
-      const wallets = response.data || [];
+      const wallets = await api.get('/preferred-wallets', {
+        params: { userId }
+      });
+      const walletsArray = Array.isArray(wallets) ? wallets : [];
       
       if (wallets.length > 0) {
         setPreferredWalletsComplete(true);

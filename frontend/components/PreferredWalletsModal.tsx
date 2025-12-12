@@ -7,9 +7,7 @@ import { isAddress } from 'viem';
 import { supabase } from '@/lib/supabase';
 import { AVAILABLE_CHAINS, getChainConfig } from '@/lib/tokenConfig';
 import toast from 'react-hot-toast';
-import axios from 'axios';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+import { api } from '@/lib/api-client';
 
 interface PreferredWallet {
   id: string;
@@ -53,9 +51,11 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId, mandato
 
   const fetchPreferredWallets = async () => {
     try {
-      const response = await axios.get(`${API_URL}/preferred-wallets?userId=${userId}`);
-      console.log('Fetched preferred wallets:', response.data);
-      setPreferredWallets(response.data || []);
+      const wallets = await api.get('/preferred-wallets', {
+        params: { userId }
+      });
+      console.log('Fetched preferred wallets:', wallets);
+      setPreferredWallets(Array.isArray(wallets) ? wallets : []);
     } catch (error: any) {
       console.error('Error fetching preferred wallets:', error);
       toast.error('Failed to load preferred wallets');
@@ -168,7 +168,7 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId, mandato
       setLoading(true);
       toast.loading('Saving wallet address...');
       
-      const response = await axios.post(`${API_URL}/preferred-wallets`, {
+      const savedWallet = await api.post('/preferred-wallets', {
         userId,
         chainId: targetChainId,
         receivingWalletAddress: address
@@ -177,7 +177,6 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId, mandato
       toast.dismiss();
       
       // Update state with the saved wallet immediately
-      const savedWallet: PreferredWallet = response.data;
       console.log('Saved wallet response:', savedWallet);
       
       // Update the preferredWallets state
@@ -231,7 +230,7 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId, mandato
       setLoading(true);
       toast.loading('Removing wallet...');
       
-      await axios.delete(`${API_URL}/preferred-wallets/${walletId}`);
+      await api.delete(`/preferred-wallets/${walletId}`);
       
       toast.dismiss();
       toast.success('Wallet removed');
@@ -278,7 +277,7 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId, mandato
       setAddressError('');
       toast.loading('Saving wallet address...');
       
-      const response = await axios.post(`${API_URL}/preferred-wallets`, {
+      const savedWallet = await api.post('/preferred-wallets', {
         userId,
         chainId: targetChainId,
         receivingWalletAddress: trimmedAddress
@@ -288,7 +287,6 @@ export default function PreferredWalletsModal({ isOpen, onClose, userId, mandato
       toast.success('Wallet address saved!');
       
       // Update state
-      const savedWallet: PreferredWallet = response.data;
       setPreferredWallets(prev => {
         const existing = prev.find(w => {
           const wChainId = typeof w.chain_id === 'string' ? parseInt(w.chain_id) : w.chain_id;

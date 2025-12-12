@@ -135,8 +135,10 @@ export default function SettingsPage() {
 
   const fetchPreferredWallets = async (userId: string) => {
     try {
-      const response = await axios.get(`${API_URL}/preferred-wallets?userId=${userId}`);
-      setPreferredWallets(response.data || []);
+      const wallets = await api.get('/preferred-wallets', {
+        params: { userId }
+      });
+      setPreferredWallets(Array.isArray(wallets) ? wallets : []);
     } catch (error: any) {
       console.error('Error fetching preferred wallets:', error);
       toast.error('Failed to load preferred wallets');
@@ -388,7 +390,7 @@ export default function SettingsPage() {
       setLoading(true);
       toast.loading('Saving wallet address...');
       
-      const response = await axios.post(`${API_URL}/preferred-wallets`, {
+      await api.post('/preferred-wallets', {
         userId: user.id,
         chainId: targetChainId,
         receivingWalletAddress: address
@@ -444,7 +446,7 @@ export default function SettingsPage() {
       setLoading(true);
       toast.loading('Removing wallet...');
       
-      await axios.delete(`${API_URL}/preferred-wallets/${walletId}`);
+      await api.delete(`/preferred-wallets/${walletId}`);
       
       toast.dismiss();
       toast.success('Wallet removed');
@@ -491,7 +493,7 @@ export default function SettingsPage() {
       setAddressError('');
       toast.loading('Saving wallet address...');
       
-      const response = await axios.post(`${API_URL}/preferred-wallets`, {
+      await api.post('/preferred-wallets', {
         userId: user.id,
         chainId: targetChainId,
         receivingWalletAddress: trimmedAddress
