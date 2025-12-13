@@ -250,16 +250,23 @@ export default function ConfirmEmailPage() {
                           
                           // Open the RainbowKit connect modal
                           if (!openConnectModal) {
-                            console.error('[Confirm] openConnectModal is not available');
-                            toast.error('Wallet connection is not ready. Please wait a moment and try again.');
+                            // If modal not ready, wait a moment and try again
+                            setTimeout(() => {
+                              if (openConnectModal) {
+                                openConnectModal();
+                              } else {
+                                toast.error('Wallet connection is not ready. Please refresh the page and try again.');
+                              }
+                            }, 100);
                             return;
                           }
                           
                           try {
                             openConnectModal();
-                          } catch (error) {
+                          } catch (error: any) {
                             console.error('[Confirm] Error opening connect modal:', error);
-                            toast.error('Failed to open wallet connection. Please try again.');
+                            // Allow user to retry - don't block the button
+                            // Error will be logged but user can click again
                           }
                         }}
                         className="w-full px-4 py-3 bg-black text-white rounded-full hover:bg-gray-900 active:scale-[0.98] transition-all duration-200 font-medium"
