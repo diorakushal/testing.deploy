@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { ConnectButton, useConnectModal } from '@rainbow-me/rainbowkit';
@@ -41,11 +41,49 @@ export default function Sidebar({ onWalletConnect }: SidebarProps) {
     },
   });
 
-  // Get wallet name dynamically from connector and window.ethereum
-  const getWalletName = () => {
+  // Helper function to format wallet names nicely
+  const formatWalletName = (name: string): string => {
+    if (!name || name === 'Wallet' || name === 'Injected') {
+      return 'Browser Wallet';
+    }
+    
+    // Remove common prefixes/suffixes
+    let formatted = name
+      .replace(/^io\./, '') // Remove "io." prefix
+      .replace(/\.wallet$/i, '') // Remove ".wallet" suffix
+      .replace(/wallet$/i, '') // Remove "wallet" suffix
+      .trim();
+    
+    // Format: capitalize first letter of each word, handle camelCase
+    formatted = formatted
+      .replace(/([a-z])([A-Z])/g, '$1 $2') // Add space before capital letters in camelCase
+      .split(/[\s-_.]+/) // Split on spaces, hyphens, underscores, dots
+      .map(word => {
+        // Capitalize first letter, lowercase the rest
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
+      .join(' ');
+    
+    return formatted || 'Browser Wallet';
+  };
+
+  // Get wallet name dynamically from connector - PRIORITIZE CONNECTOR over window.ethereum
+  // This ensures the name updates correctly when switching wallets
+  const walletName = useMemo(() => {
     if (!connector) return 'Wallet';
     
-    // First, try to get wallet name from window.ethereum properties (most reliable)
+    // PRIORITY 1: Use connector's actual name/id (wagmi/RainbowKit provides the real wallet name)
+    // This is the most reliable source when switching wallets
+    const connectorName = connector.name || connector.id || '';
+    
+    if (connectorName && connectorName !== 'Wallet' && connectorName !== 'Injected') {
+      const formatted = formatWalletName(connectorName);
+      if (formatted !== 'Browser Wallet') {
+        return formatted;
+      }
+    }
+    
+    // PRIORITY 2: Check window.ethereum properties (fallback for injected wallets)
     if (typeof window !== 'undefined' && window.ethereum) {
       const ethereum = window.ethereum as any;
       
@@ -88,40 +126,9 @@ export default function Sidebar({ onWalletConnect }: SidebarProps) {
       }
     }
     
-    // Use connector's actual name/id (wagmi/RainbowKit provides the real wallet name)
-    const connectorName = connector.name || connector.id || 'Wallet';
-    
-    // Format the name nicely but preserve the actual wallet name
-    return formatWalletName(connectorName);
-  };
-  
-  // Helper function to format wallet names nicely
-  const formatWalletName = (name: string): string => {
-    if (!name || name === 'Wallet' || name === 'Injected') {
-      return 'Browser Wallet';
-    }
-    
-    // Remove common prefixes/suffixes
-    let formatted = name
-      .replace(/^io\./, '') // Remove "io." prefix
-      .replace(/\.wallet$/i, '') // Remove ".wallet" suffix
-      .replace(/wallet$/i, '') // Remove "wallet" suffix
-      .trim();
-    
-    // Format: capitalize first letter of each word, handle camelCase
-    formatted = formatted
-      .replace(/([a-z])([A-Z])/g, '$1 $2') // Add space before capital letters in camelCase
-      .split(/[\s-_.]+/) // Split on spaces, hyphens, underscores, dots
-      .map(word => {
-        // Capitalize first letter, lowercase the rest
-        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-      })
-      .join(' ');
-    
-    return formatted || 'Browser Wallet';
-  };
-
-  const walletName = getWalletName();
+    // Fallback
+    return formatWalletName(connectorName || 'Browser Wallet');
+  }, [connector, address, isConnected]); // Re-compute when connector, address, or connection status changes
 
   // Notify parent component when wallet connects
   useEffect(() => {
