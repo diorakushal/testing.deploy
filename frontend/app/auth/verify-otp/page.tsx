@@ -459,20 +459,15 @@ export default function VerifyOtpPage() {
                           setConnectedAfterClick(false);
                           
                           // Open the RainbowKit connect modal
-                          if (!openConnectModal) {
-                            // If modal not ready, wait a moment and try again
-                            setTimeout(() => {
-                              if (openConnectModal) {
-                                openConnectModal();
-                              } else {
-                                toast.error('Wallet connection is not ready. Please refresh the page and try again.');
-                              }
-                            }, 100);
+                          const connectModalFn = openConnectModal;
+                          if (!connectModalFn) {
+                            // If modal not ready, just try to call it anyway (will retry on next click)
+                            toast.error('Wallet connection is not ready. Please try again in a moment.');
                             return;
                           }
                           
                           try {
-                            openConnectModal();
+                            connectModalFn();
                           } catch (error: any) {
                             console.error('[VerifyOTP] Error opening connect modal:', error);
                             // Allow user to retry - don't block the button

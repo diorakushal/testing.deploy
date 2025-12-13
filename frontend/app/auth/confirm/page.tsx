@@ -250,14 +250,8 @@ export default function ConfirmEmailPage() {
                           
                           // Open the RainbowKit connect modal
                           if (!openConnectModal) {
-                            // If modal not ready, wait a moment and try again
-                            setTimeout(() => {
-                              if (openConnectModal) {
-                                openConnectModal();
-                              } else {
-                                toast.error('Wallet connection is not ready. Please refresh the page and try again.');
-                              }
-                            }, 100);
+                            // If modal not ready, show message and let user try again
+                            toast.error('Wallet connection is not ready. Please try again in a moment.');
                             return;
                           }
                           
