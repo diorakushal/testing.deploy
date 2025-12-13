@@ -194,3 +194,4 @@ If you need to get the service live quickly:
 
 **Most likely fix: Update DATABASE_URL to use direct connection instead of pooler, or fix the password encoding!**
 
+

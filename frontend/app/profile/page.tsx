@@ -17,13 +17,6 @@ interface User {
   last_name?: string | null;
   email?: string | null;
   profile_image_url?: string | null;
-  markets_created: number;
-  total_staked: number | string;
-  total_earnings: number | string;
-  wins: number;
-  losses: number;
-  markets?: any[];
-  stakes?: any[];
 }
 
 export default function ProfilePage() {
@@ -128,117 +121,10 @@ export default function ProfilePage() {
               </h2>
               <p className="text-gray-600 mb-4">{formatAddress(user.wallet_address)}</p>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <div className="text-sm text-gray-600 mb-1">Total Staked</div>
-                  <div className="text-xl font-bold text-gray-900">
-                    ${typeof user.total_staked === 'number' ? user.total_staked.toLocaleString() : parseFloat(user.total_staked.toString()).toLocaleString()}
-                  </div>
-                </div>
-                <div className="p-4 bg-green-50 rounded-lg">
-                  <div className="text-sm text-gray-600 mb-1">Total Earnings</div>
-                  <div className="text-xl font-bold text-gray-900">
-                    ${typeof user.total_earnings === 'number' ? user.total_earnings.toLocaleString() : parseFloat(user.total_earnings.toString()).toLocaleString()}
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
 
-        {/* Stats Card */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-xl shadow-sm p-6 text-center">
-            <div className="text-3xl font-bold text-gray-900">{user.markets_created}</div>
-            <div className="text-sm text-gray-600 mt-1">Markets Created</div>
-          </div>
-          <div className="bg-white rounded-xl shadow-sm p-6 text-center">
-            <div className="text-3xl font-bold text-green-600">{user.wins}</div>
-            <div className="text-sm text-gray-600 mt-1">Wins</div>
-          </div>
-          <div className="bg-white rounded-xl shadow-sm p-6 text-center">
-            <div className="text-3xl font-bold text-red-600">{user.losses}</div>
-            <div className="text-sm text-gray-600 mt-1">Losses</div>
-          </div>
-          <div className="bg-white rounded-xl shadow-sm p-6 text-center">
-            <div className="text-3xl font-bold text-gray-900">
-              {user.wins + user.losses > 0 
-                ? `${Math.round((user.wins / (user.wins + user.losses)) * 100)}%`
-                : '0%'
-              }
-            </div>
-            <div className="text-sm text-gray-600 mt-1">Win Rate</div>
-          </div>
-        </div>
-
-        {/* Markets Created */}
-        <div className="bg-white rounded-xl shadow-sm p-6">
-          <h3 className="text-xl font-bold mb-4">Your Markets</h3>
-          {user.markets && user.markets.length > 0 ? (
-            <div className="space-y-3">
-              {user.markets.map((market: any) => (
-                <Link
-                  key={market.id}
-                  href={`/market/${market.id}`}
-                  className="block p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-semibold text-gray-900">{market.title}</div>
-                      <div className="text-sm text-gray-500">
-                        {new Date(market.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-bold text-gray-900">
-                        ${(parseFloat(market.total_agree_stakes) + parseFloat(market.total_disagree_stakes)).toLocaleString()}
-                      </div>
-                      <div className="text-xs text-gray-500">Total Volume</div>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-500 text-center py-8">You haven't created any markets yet</p>
-          )}
-        </div>
-
-        {/* Recent Stakes */}
-        <div className="bg-white rounded-xl shadow-sm p-6 mt-6">
-          <h3 className="text-xl font-bold mb-4">Recent Stakes</h3>
-          {user.stakes && user.stakes.length > 0 ? (
-            <div className="space-y-3">
-              {user.stakes.map((stake: any) => (
-                <div
-                  key={stake.id}
-                  className="p-4 border border-gray-200 rounded-lg"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-semibold text-gray-900">{stake.title}</div>
-                      <div className="text-sm text-gray-500">
-                        {stake.side === 1 ? '✓ Agreed' : '✗ Disagreed'} • {new Date(stake.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-bold text-gray-900">
-                        ${parseFloat(stake.amount).toLocaleString()}
-                      </div>
-                      {stake.resolved && stake.payout && (
-                        <div className={`text-sm ${stake.side === stake.winner ? 'text-green-600' : 'text-red-600'}`}>
-                          {stake.side === stake.winner ? `+${(typeof stake.payout === 'number' ? stake.payout : parseFloat(stake.payout)) - (typeof stake.amount === 'number' ? stake.amount : parseFloat(stake.amount))}` : `-${typeof stake.amount === 'number' ? stake.amount.toLocaleString() : parseFloat(stake.amount).toLocaleString()}`}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-500 text-center py-8">You haven't placed any stakes yet</p>
-          )}
-        </div>
       </main>
     </div>
   );

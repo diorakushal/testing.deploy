@@ -431,7 +431,6 @@ export default function SignUpPage() {
                         required
                         minLength={5}
                         maxLength={30}
-                        pattern="[a-zA-Z][a-zA-Z0-9_-]*"
                         disabled={checkingUsername}
                       />
                       {checkingUsername && (

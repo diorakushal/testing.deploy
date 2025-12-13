@@ -225,3 +225,4 @@ If you see IPv4 compatibility errors:
 ---
 
 **Your DATABASE_URL is ready! Use Transaction Pooler for best results.** 🚀
+

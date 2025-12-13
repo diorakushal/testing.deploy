@@ -2,7 +2,8 @@ import { createClient } from '@supabase/supabase-js'
 
 // Validate required environment variables - no fallbacks for security
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+// Support both variable names for compatibility
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 // Debug logging (remove after fixing)
 if (typeof window !== 'undefined') {
@@ -15,7 +16,7 @@ if (!supabaseUrl) {
 }
 
 if (!supabaseAnonKey) {
-  throw new Error('Missing required environment variable: NEXT_PUBLIC_SUPABASE_ANON_KEY. Please set it in your .env.local file.')
+  throw new Error('Missing required environment variable: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY. Please set it in your .env.local file.')
 }
 
 // Configure Supabase client with better session persistence

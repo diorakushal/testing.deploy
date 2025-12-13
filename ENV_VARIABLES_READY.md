@@ -83,3 +83,4 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_Y8B7C3AhTRonpnMNd04nhg_vot-w2o9
 ---
 
 **Everything is ready! Just paste these into your hosting platforms.** 🎉
+

@@ -161,3 +161,4 @@ If `DATABASE_URL` keeps causing issues, you can use individual parameters instea
 
 **Once all environment variables are correctly set, your service will start successfully!** 🚀
 
+

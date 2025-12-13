@@ -91,3 +91,4 @@ cd frontend
 - ✅ Restrict CORS to your domain only
 - ✅ Enable rate limiting
 - ✅ Set up error monitoring
+

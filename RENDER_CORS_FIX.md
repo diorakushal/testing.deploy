@@ -36,3 +36,4 @@ You need to add your production Vercel URL to `ALLOWED_ORIGINS`:
 ---
 
 **The code now allows all Vercel preview URLs automatically!** ✅
+

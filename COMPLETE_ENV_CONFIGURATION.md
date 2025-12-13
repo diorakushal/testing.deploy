@@ -194,3 +194,4 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_Y8B7C3AhTRonpnMNd04nhg_vot-w2o9
 ---
 
 **Your environment variables are now complete and ready for deployment!** 🚀
+

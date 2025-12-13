@@ -143,3 +143,4 @@ Supabase local development is a great tool for local development, but it doesn't
 
 **Your current setup is correct - you just need to fix the health check issue!**
 
+

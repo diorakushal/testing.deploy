@@ -206,3 +206,4 @@ Expected response:
 ---
 
 **Your environment is properly configured! You're ready to test the application.** 🚀
+

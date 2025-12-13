@@ -120,3 +120,4 @@ if (hasErrors) {
   console.log('Your backend is ready to start.');
   process.exit(0);
 }
+

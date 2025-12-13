@@ -82,3 +82,4 @@ if (hasErrors) {
   console.log('Your frontend is ready to start.');
   process.exit(0);
 }
+

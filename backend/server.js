@@ -869,6 +869,33 @@ app.post('/api/payment-requests',
       throw error;
     }
     
+    // Send email notification to requester (async, don't block response)
+    if (requesterUserId && data) {
+      try {
+        // Get requester's email from database
+        const { data: requesterUser } = await supabase
+          .from('users')
+          .select('email, first_name, last_name, username')
+          .eq('id', requesterUserId)
+          .single();
+        
+        if (requesterUser?.email) {
+          const { sendPaymentRequestCreatedEmail } = require('./lib/email');
+          sendPaymentRequestCreatedEmail({
+            email: requesterUser.email,
+            amount: amount,
+            tokenSymbol: tokenSymbol,
+            chainName: chainName,
+            caption: caption || null,
+            requestId: data.id
+          }).catch(err => console.error('[Email] Failed to send payment request created email:', err));
+        }
+      } catch (emailError) {
+        console.error('[Email] Error sending payment request created notification:', emailError);
+        // Don't fail the request if email fails
+      }
+    }
+    
     res.json(data);
   } catch (error) {
     console.error('Error creating payment request:', error);
@@ -1089,6 +1116,51 @@ app.patch('/api/payment-requests/:id/paid',
         verifiedStatus: verifyRequest.status,
         verifiedTxHash: verifyRequest.tx_hash
       });
+    }
+    
+    // Send email notification to requester (async, don't block response)
+    if (updatedRequest.requester_user_id) {
+      try {
+        // Get requester's email and payer's info
+        const [requesterResult, payerResult] = await Promise.all([
+          supabase
+            .from('users')
+            .select('email, first_name, last_name, username')
+            .eq('id', updatedRequest.requester_user_id)
+            .single(),
+          // Try to get payer's info if they have a user account
+          paidBy ? supabase
+            .from('users')
+            .select('first_name, last_name, username')
+            .eq('wallet_address', paidBy.toLowerCase())
+            .maybeSingle() : Promise.resolve({ data: null })
+        ]);
+        
+        const requesterUser = requesterResult.data;
+        const payerUser = payerResult.data;
+        
+        if (requesterUser?.email) {
+          const { sendRequestFulfilledEmail } = require('./lib/email');
+          const payerName = payerUser 
+            ? (payerUser.first_name && payerUser.last_name 
+                ? `${payerUser.first_name} ${payerUser.last_name}` 
+                : payerUser.username ? `@${payerUser.username}` : null)
+            : null;
+          
+          sendRequestFulfilledEmail({
+            email: requesterUser.email,
+            amount: updatedRequest.amount.toString(),
+            tokenSymbol: updatedRequest.token_symbol,
+            payerName: payerName,
+            payerAddress: paidBy,
+            txHash: updatedRequest.tx_hash,
+            chainName: updatedRequest.chain_name
+          }).catch(err => console.error('[Email] Failed to send request fulfilled email:', err));
+        }
+      } catch (emailError) {
+        console.error('[Email] Error sending request fulfilled notification:', emailError);
+        // Don't fail the request if email fails
+      }
     }
     
     res.json(updatedRequest);
@@ -1826,6 +1898,101 @@ app.post('/api/payment-sends',
     }
 
     console.log('[PaymentSendsAPI] ✅ Payment send created successfully:', data);
+    
+    // Send email notifications (async, don't block response)
+    Promise.all([
+      // Email to sender
+      (async () => {
+        if (senderUserId) {
+          try {
+            const { data: senderUser } = await supabase
+              .from('users')
+              .select('email, first_name, last_name, username')
+              .eq('id', senderUserId)
+              .single();
+            
+            if (senderUser?.email) {
+              // Get recipient info
+              const recipientInfo = recipientUserId 
+                ? await supabase
+                    .from('users')
+                    .select('first_name, last_name, username')
+                    .eq('id', recipientUserId)
+                    .maybeSingle()
+                : { data: null };
+              
+              const recipientUser = recipientInfo.data;
+              const recipientName = recipientUser
+                ? (recipientUser.first_name && recipientUser.last_name
+                    ? `${recipientUser.first_name} ${recipientUser.last_name}`
+                    : recipientUser.username ? `@${recipientUser.username}` : null)
+                : null;
+              
+              const { sendPaymentSentEmail } = require('./lib/email');
+              sendPaymentSentEmail({
+                email: senderUser.email,
+                amount: amount.toString(),
+                tokenSymbol: tokenSymbol,
+                recipientName: recipientName,
+                recipientAddress: recipientAddress,
+                txHash: txHash,
+                chainName: chainName,
+                caption: caption || null
+              }).catch(err => console.error('[Email] Failed to send payment sent email:', err));
+            }
+          } catch (err) {
+            console.error('[Email] Error sending payment sent notification:', err);
+          }
+        }
+      })(),
+      // Email to recipient
+      (async () => {
+        if (recipientUserId) {
+          try {
+            const { data: recipientUser } = await supabase
+              .from('users')
+              .select('email, first_name, last_name, username')
+              .eq('id', recipientUserId)
+              .single();
+            
+            if (recipientUser?.email) {
+              // Get sender info
+              const senderInfo = senderUserId
+                ? await supabase
+                    .from('users')
+                    .select('first_name, last_name, username')
+                    .eq('id', senderUserId)
+                    .maybeSingle()
+                : { data: null };
+              
+              const senderUserInfo = senderInfo.data;
+              const senderName = senderUserInfo
+                ? (senderUserInfo.first_name && senderUserInfo.last_name
+                    ? `${senderUserInfo.first_name} ${senderUserInfo.last_name}`
+                    : senderUserInfo.username ? `@${senderUserInfo.username}` : null)
+                : null;
+              
+              const { sendPaymentReceivedEmail } = require('./lib/email');
+              sendPaymentReceivedEmail({
+                email: recipientUser.email,
+                amount: amount.toString(),
+                tokenSymbol: tokenSymbol,
+                senderName: senderName,
+                senderAddress: senderAddress,
+                txHash: txHash,
+                chainName: chainName,
+                caption: caption || null
+              }).catch(err => console.error('[Email] Failed to send payment received email:', err));
+            }
+          } catch (err) {
+            console.error('[Email] Error sending payment received notification:', err);
+          }
+        }
+      })()
+    ]).catch(err => {
+      console.error('[Email] Error in email notification process:', err);
+    });
+    
     res.json(data);
   } catch (error) {
     console.error('Error creating payment send:', error);

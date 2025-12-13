@@ -69,3 +69,4 @@ If the `SUPABASE_ANON_KEY` is wrong, both will fail.
 ---
 
 **Update `SUPABASE_ANON_KEY` in Render with the correct JWT format key!** 🔑
+

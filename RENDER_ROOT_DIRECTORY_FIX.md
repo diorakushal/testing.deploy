@@ -143,3 +143,4 @@ Server running on port 10000  ← Should work!
 
 **Try Option 1 first (Root Directory) - it's cleaner and more reliable!**
 
+

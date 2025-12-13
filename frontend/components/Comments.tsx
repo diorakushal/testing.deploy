@@ -11,8 +11,10 @@ interface CommentsProps {
   marketId: string;
 }
 
+// DEPRECATED: This component is no longer used
+// The platform has pivoted to Blockbook (crypto payment platform)
+// Comments functionality has been removed
 export default function Comments({ marketId }: CommentsProps) {
-  // This is a placeholder - comments are now integrated in MarketDetailPopup
   return null;
 }
 

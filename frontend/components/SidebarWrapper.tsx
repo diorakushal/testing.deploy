@@ -7,7 +7,7 @@ export default function SidebarWrapper({ children }: { children: React.ReactNode
   const pathname = usePathname();
   
   // Hide header on login, signup, auth pages, and public profile pages (single-segment usernames)
-  const knownRoutes = ['/feed', '/pay', '/request', '/profile', '/settings', '/search', '/market', 
+  const knownRoutes = ['/feed', '/pay', '/request', '/profile', '/settings', '/search', 
     '/payment-request', '/preferred-wallets', '/documentation', '/terms', '/user'];
   const isPublicProfile = pathname && pathname !== '/' && 
     !knownRoutes.some(route => pathname.startsWith(route)) &&

@@ -1,79 +1,68 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your Sign-In Code</title>
-</head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
-  <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f5f5f5; padding: 40px 20px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" style="max-width: 500px; width: 100%; background-color: #ffffff; border-radius: 12px; padding: 40px 32px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
-          <!-- Logo -->
-          <tr>
-            <td align="center" style="padding-bottom: 32px;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 40px 20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <tr>
+    <td align="center">
+      <table width="500" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; padding: 40px 32px; max-width: 500px; width: 100%;">
+        <!-- Logo -->
+        <tr>
+          <td align="center" style="padding-bottom: 32px;">
+            <div style="display: inline-block;">
               <div style="display: inline-flex; align-items: center; gap: 12px;">
-                <div style="width: 48px; height: 48px; background-color: #000000; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
-                  <span style="color: #ffffff; font-size: 28px; font-weight: bold;">B</span>
-                </div>
+                <img src="https://yourdomain.com/applogo.jpg" alt="blockbook" style="width: 48px; height: 48px; border-radius: 8px; display: block; object-fit: contain;" />
                 <span style="font-size: 24px; font-weight: bold; color: #000000; letter-spacing: -0.02em;">blockbook</span>
               </div>
-            </td>
-          </tr>
-          
-          <!-- Heading -->
-          <tr>
-            <td align="center" style="padding-bottom: 24px;">
-              <h1 style="margin: 0; font-size: 28px; font-weight: 600; color: #000000; letter-spacing: -0.02em;">Sign-In Code</h1>
-            </td>
-          </tr>
-          
-          <!-- Code -->
-          <tr>
-            <td align="center" style="padding-bottom: 32px;">
-              <div style="font-size: 48px; font-weight: 700; color: #000000; letter-spacing: 8px; font-family: 'Courier New', monospace; padding: 20px 0; white-space: nowrap; overflow: hidden;">
-                {{ .Token }}
-              </div>
-            </td>
-          </tr>
-          
-          <!-- Security Message -->
-          <tr>
-            <td style="padding-bottom: 24px;">
-              <p style="margin: 0 0 12px 0; font-size: 14px; line-height: 1.6; color: #666666;">
-                This code is for you and only you to use to sign in to blockbook.
-              </p>
-              <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #666666;">
-                To prevent fraud on your account, never share it anywhere or for any reason with anyone, including people posing as blockbook.
-              </p>
-            </td>
-          </tr>
-          
-          <!-- Expiration Notice -->
-          <tr>
-            <td style="padding-bottom: 32px; border-top: 1px solid #e5e5e5; padding-top: 24px;">
-              <p style="margin: 0; font-size: 13px; color: #999999; text-align: center;">
-                This code expires in 1 hour.
-              </p>
-            </td>
-          </tr>
-          
-          <!-- Footer -->
-          <tr>
-            <td style="padding-top: 24px; border-top: 1px solid #e5e5e5;">
-              <p style="margin: 0 0 8px 0; font-size: 12px; line-height: 1.5; color: #999999; text-align: center;">
-                If you didn't request this code, you can safely ignore this email.
-              </p>
-              <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #999999; text-align: center;">
-                © blockbook. All rights reserved.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-
+            </div>
+          </td>
+        </tr>
+        
+        <!-- Heading -->
+        <tr>
+          <td align="center" style="padding-bottom: 24px;">
+            <h1 style="margin: 0; font-size: 28px; font-weight: 600; color: #000000; letter-spacing: -0.02em;">Sign-In Code</h1>
+          </td>
+        </tr>
+        
+        <!-- Code -->
+        <tr>
+          <td align="center" style="padding-bottom: 32px;">
+            <div style="font-size: 48px; font-weight: 700; color: #000000; letter-spacing: 8px; font-family: 'Courier New', monospace; padding: 20px 0; white-space: nowrap; overflow: hidden;">
+              {{ .Token }}
+            </div>
+          </td>
+        </tr>
+        
+        <!-- Security Message -->
+        <tr>
+          <td style="padding-bottom: 24px;">
+            <p style="margin: 0 0 12px 0; font-size: 14px; line-height: 1.6; color: #666666;">
+              This code is for you and only you to use to sign in to blockbook.
+            </p>
+            <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #666666;">
+              To prevent fraud on your account, never share it anywhere or for any reason with anyone, including people posing as blockbook.
+            </p>
+          </td>
+        </tr>
+        
+        <!-- Expiration Notice -->
+        <tr>
+          <td style="padding-bottom: 32px; border-top: 1px solid #e5e5e5; padding-top: 24px;">
+            <p style="margin: 0; font-size: 13px; color: #999999; text-align: center;">
+              This code expires in 1 hour.
+            </p>
+          </td>
+        </tr>
+        
+        <!-- Footer -->
+        <tr>
+          <td style="padding-top: 24px; border-top: 1px solid #e5e5e5;">
+            <p style="margin: 0 0 8px 0; font-size: 12px; line-height: 1.5; color: #999999; text-align: center;">
+              If you didn't request this code, you can safely ignore this email.
+            </p>
+            <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #999999; text-align: center;">
+              © blockbook. All rights reserved.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

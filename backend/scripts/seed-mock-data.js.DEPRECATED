@@ -1,0 +1,12 @@
+// ==============================================================================
+// DEPRECATED: This script seeds opinion market data which is no longer used
+// The platform has pivoted to Blockbook (crypto payment platform)
+// This file is kept for reference only - DO NOT RUN
+// ==============================================================================
+
+// Original script seeded markets, stakes, and opinion market data
+// All opinion market tables (markets, stakes, market_payouts, user_payouts) 
+// have been removed from the database schema
+
+// If you need to seed test data for the payment platform, create a new script
+// that seeds payment_requests, payment_sends, contacts, and preferred_wallets

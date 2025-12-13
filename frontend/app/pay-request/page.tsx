@@ -2,7 +2,7 @@
 
 import { useRouter, usePathname } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
-import CreateMarketSidebar from '@/components/CreateMarketSidebar';
+import CreatePaymentSidebar from '@/components/CreatePaymentSidebar';
 import { supabase } from '@/lib/supabase';
 
 export default function PayRequestPage() {
@@ -257,7 +257,7 @@ export default function PayRequestPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <div className="flex justify-center">
           <div className="w-full max-w-md">
-            <CreateMarketSidebar onSuccess={handleSuccess} />
+            <CreatePaymentSidebar onSuccess={handleSuccess} />
           </div>
         </div>
       </main>

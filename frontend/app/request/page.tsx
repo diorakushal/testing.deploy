@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import CreateMarketSidebar from '@/components/CreateMarketSidebar';
+import CreatePaymentSidebar from '@/components/CreatePaymentSidebar';
 
 export default function RequestPage() {
   const router = useRouter();
@@ -33,7 +33,7 @@ export default function RequestPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <div className="flex justify-center">
           <div className="w-full max-w-md">
-            <CreateMarketSidebar 
+            <CreatePaymentSidebar 
               onSuccess={handleSuccess} 
               defaultMode="request" 
               initialTo={toParam || undefined}

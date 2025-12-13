@@ -48,13 +48,13 @@ const ERC20_ABI = [
   }
 ] as const;
 
-interface CreateMarketSidebarProps {
+interface CreatePaymentSidebarProps {
   onSuccess: () => void;
   defaultMode?: 'pay' | 'request';
   initialTo?: string;
 }
 
-export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request', initialTo }: CreateMarketSidebarProps) {
+export default function CreatePaymentSidebar({ onSuccess, defaultMode = 'request', initialTo }: CreatePaymentSidebarProps) {
   const router = useRouter();
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
@@ -345,7 +345,7 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
 
   // Handle transaction success for direct payments
   useEffect(() => {
-    console.log('[CreateMarketSidebar] Transaction receipt effect', {
+    console.log('[CreatePaymentSidebar] Transaction receipt effect', {
       isSuccess,
       hash,
       mode,
@@ -355,7 +355,7 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
     });
     
     if (isSuccess && hash && mode === 'pay' && processedHashRef.current !== hash) {
-      console.log('[CreateMarketSidebar] ✅ Transaction confirmed, calling handleDirectPaymentSuccess');
+      console.log('[CreatePaymentSidebar] ✅ Transaction confirmed, calling handleDirectPaymentSuccess');
       processedHashRef.current = hash;
       handleDirectPaymentSuccess(hash);
     }
@@ -363,13 +363,13 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
 
   useEffect(() => {
     if (hash && mode === 'pay') {
-      console.log('[CreateMarketSidebar] 📝 Transaction hash received:', hash);
-      console.log('[CreateMarketSidebar] Waiting for transaction receipt...');
+      console.log('[CreatePaymentSidebar] 📝 Transaction hash received:', hash);
+      console.log('[CreatePaymentSidebar] Waiting for transaction receipt...');
     }
   }, [hash, mode]);
 
   const handleDirectPaymentSuccess = async (txHash: string) => {
-    console.log('[CreateMarketSidebar] 🎉 handleDirectPaymentSuccess called with txHash:', txHash);
+    console.log('[CreatePaymentSidebar] 🎉 handleDirectPaymentSuccess called with txHash:', txHash);
     try {
       toast.dismiss();
       
@@ -377,9 +377,9 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
       
       if (paymentSendId) {
         paymentSendIdToUpdate = paymentSendId;
-        console.log('[CreateMarketSidebar] Using stored paymentSendId:', paymentSendIdToUpdate);
+        console.log('[CreatePaymentSidebar] Using stored paymentSendId:', paymentSendIdToUpdate);
       } else {
-        console.log('[CreateMarketSidebar] Payment send ID not in state, searching by tx_hash:', txHash);
+        console.log('[CreatePaymentSidebar] Payment send ID not in state, searching by tx_hash:', txHash);
         try {
           const searchResponse = await axios.get(`${API_URL}/payment-sends`, {
             params: { txHash: txHash }
@@ -393,26 +393,26 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
             
             if (pendingSend) {
               paymentSendIdToUpdate = pendingSend.id;
-              console.log('[CreateMarketSidebar] ✅ Found existing payment send by tx_hash:', paymentSendIdToUpdate);
+              console.log('[CreatePaymentSidebar] ✅ Found existing payment send by tx_hash:', paymentSendIdToUpdate);
             }
           }
         } catch (searchError: any) {
-          console.warn('[CreateMarketSidebar] Could not search for payment send by tx_hash:', searchError.message);
+          console.warn('[CreatePaymentSidebar] Could not search for payment send by tx_hash:', searchError.message);
         }
       }
       
       if (paymentSendIdToUpdate) {
-        console.log('[CreateMarketSidebar] Updating payment send status to confirmed:', paymentSendIdToUpdate);
+        console.log('[CreatePaymentSidebar] Updating payment send status to confirmed:', paymentSendIdToUpdate);
         try {
           await api.patch(`/payment-sends/${paymentSendIdToUpdate}/confirmed`, {
             txHash: txHash
           });
-          console.log('[CreateMarketSidebar] ✅ Payment send marked as confirmed');
+          console.log('[CreatePaymentSidebar] ✅ Payment send marked as confirmed');
         } catch (error: any) {
-          console.error('[CreateMarketSidebar] ❌ Error updating payment send status:', error);
+          console.error('[CreatePaymentSidebar] ❌ Error updating payment send status:', error);
         }
       } else {
-        console.log('[CreateMarketSidebar] Payment send not found, creating new record...');
+        console.log('[CreatePaymentSidebar] Payment send not found, creating new record...');
         const recipientAddress = selectedRecipient?.walletAddress || formData.to;
         
         if (selectedToken && selectedChain && recipientAddress && address) {
@@ -430,21 +430,21 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
               caption: formData.caption || null,
               txHash: txHash
             };
-            console.log('[CreateMarketSidebar] 📤 Creating payment send with payload:', JSON.stringify(payload, null, 2));
+            console.log('[CreatePaymentSidebar] 📤 Creating payment send with payload:', JSON.stringify(payload, null, 2));
             const response = await api.post('/payment-sends', payload);
-            console.log('[CreateMarketSidebar] ✅ Payment send record created successfully:', response);
+            console.log('[CreatePaymentSidebar] ✅ Payment send record created successfully:', response);
             setPaymentSendId(response.id);
             
             try {
               await api.patch(`/payment-sends/${response.id}/confirmed`, {
                 txHash: txHash
               });
-              console.log('[CreateMarketSidebar] ✅ Payment send marked as confirmed');
+              console.log('[CreatePaymentSidebar] ✅ Payment send marked as confirmed');
             } catch (error: any) {
-              console.error('[CreateMarketSidebar] ❌ Error updating payment send status:', error);
+              console.error('[CreatePaymentSidebar] ❌ Error updating payment send status:', error);
             }
           } catch (error: any) {
-            console.error('[CreateMarketSidebar] ❌ Error creating payment send record:', error);
+            console.error('[CreatePaymentSidebar] ❌ Error creating payment send record:', error);
           }
         }
       }
@@ -658,27 +658,27 @@ export default function CreateMarketSidebar({ onSuccess, defaultMode = 'request'
         args: [recipientAddress as Address, amountInWei],
       }, {
         onSuccess: async (txHash) => {
-          console.log('[CreateMarketSidebar] ✅ writeContract onSuccess called with hash:', txHash);
+          console.log('[CreatePaymentSidebar] ✅ writeContract onSuccess called with hash:', txHash);
           toast.loading('Transaction pending...');
           
           if (txHash && mode === 'pay') {
-            console.log('[CreateMarketSidebar] 📝 Creating payment send record immediately with hash:', txHash);
+            console.log('[CreatePaymentSidebar] 📝 Creating payment send record immediately with hash:', txHash);
             try {
               const payload = {
                 ...paymentData,
                 txHash: txHash
               };
-              console.log('[CreateMarketSidebar] 📤 Creating payment send with payload:', JSON.stringify(payload, null, 2));
+              console.log('[CreatePaymentSidebar] 📤 Creating payment send with payload:', JSON.stringify(payload, null, 2));
               const response = await axios.post(`${API_URL}/payment-sends`, payload);
-              console.log('[CreateMarketSidebar] ✅ Payment send record created successfully:', response.data);
+              console.log('[CreatePaymentSidebar] ✅ Payment send record created successfully:', response.data);
               setPaymentSendId(response.data.id);
             } catch (error: any) {
-              console.error('[CreateMarketSidebar] ❌ Error creating payment send record (fallback):', error);
+              console.error('[CreatePaymentSidebar] ❌ Error creating payment send record (fallback):', error);
             }
           }
         },
         onError: (error: any) => {
-          console.error('[CreateMarketSidebar] ❌ writeContract error:', error);
+          console.error('[CreatePaymentSidebar] ❌ writeContract error:', error);
           toast.dismiss();
           
           let errorMessage = 'Failed to send payment';
