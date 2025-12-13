@@ -25,7 +25,25 @@ export default function ConfirmEmailPage() {
   const wasConnectedBeforeClickRef = useRef<boolean>(false); // Track connection state at moment of click
   
   const { address, isConnected } = useAccount();
-  const { openConnectModal } = useConnectModal();
+  const connectModalResult = useConnectModal();
+  // Handle both object destructuring and direct function return
+  const openConnectModal = typeof connectModalResult === 'function' 
+    ? connectModalResult 
+    : connectModalResult?.openConnectModal;
+  const [mounted, setMounted] = useState(false);
+  
+  // Ensure we're on client side
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  
+  // Debug: Log modal availability
+  useEffect(() => {
+    if (mounted) {
+      console.log('[Confirm] Connect modal available:', !!openConnectModal, 'Hook result:', connectModalResult);
+      console.log('[Confirm] Hook type:', typeof connectModalResult, 'OpenModal type:', typeof openConnectModal);
+    }
+  }, [mounted, openConnectModal, connectModalResult]);
   
   // Track wallet connection ONLY after user clicks "Connect Wallet"
   // This ensures we only proceed with manually connected wallets (not pre-existing connections)
@@ -249,18 +267,23 @@ export default function ConfirmEmailPage() {
                           setConnectedAfterClick(false);
                           
                           // Open the RainbowKit connect modal
-                          if (!openConnectModal) {
-                            // If modal not ready, show message and let user try again
-                            toast.error('Wallet connection is not ready. Please try again in a moment.');
+                          if (!mounted) {
+                            console.warn('[Confirm] Component not mounted yet');
                             return;
                           }
                           
-                          try {
-                            openConnectModal();
-                          } catch (error: any) {
-                            console.error('[Confirm] Error opening connect modal:', error);
-                            // Allow user to retry - don't block the button
-                            // Error will be logged but user can click again
+                          if (openConnectModal) {
+                            try {
+                              console.log('[Confirm] Opening connect modal...');
+                              openConnectModal();
+                            } catch (error: any) {
+                              console.error('[Confirm] Error opening connect modal:', error);
+                              toast.error('Failed to open wallet connection. Please try again.');
+                            }
+                          } else {
+                            console.error('[Confirm] openConnectModal is undefined. Hook result:', connectModalResult);
+                            console.error('[Confirm] Full hook object:', JSON.stringify(connectModalResult, null, 2));
+                            toast.error('Wallet connection is not ready. Please refresh the page.');
                           }
                         }}
                         className="w-full px-4 py-3 bg-black text-white rounded-full hover:bg-gray-900 active:scale-[0.98] transition-all duration-200 font-medium"
