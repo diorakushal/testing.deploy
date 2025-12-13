@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { ConnectButton, useConnectModal } from '@rainbow-me/rainbowkit';
-import { useAccount, useBalance, useDisconnect } from 'wagmi';
+import { useAccount, useBalance, useDisconnect, useChainId, useChains } from 'wagmi';
 import { formatEther } from 'viem';
 import { supabase } from '@/lib/supabase';
 import toast from 'react-hot-toast';
@@ -31,6 +31,8 @@ export default function Sidebar({ onWalletConnect }: SidebarProps) {
   const { address, isConnected, connector } = useAccount();
   const { disconnect } = useDisconnect();
   const { openConnectModal } = useConnectModal();
+  const currentChainId = useChainId();
+  const chains = useChains();
   
   // Track if we should open modal after disconnect
   const [shouldOpenModal, setShouldOpenModal] = useState(false);
@@ -397,9 +399,9 @@ export default function Sidebar({ onWalletConnect }: SidebarProps) {
                       <div className="text-xs text-gray-300 font-mono mt-1" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif' }}>
                         {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : ''}
                       </div>
-                      {balance && (
+                      {isConnected && currentChainId && (
                         <div className="text-xs text-gray-300 mt-1" style={{ fontFamily: 'Inter, system-ui, -apple-system, sans-serif' }}>
-                          {parseFloat(formatEther(balance.value)).toFixed(4)} {balance.symbol}
+                          {chains.find(c => c.id === currentChainId)?.name || `Chain ${currentChainId}`}
                         </div>
                       )}
                     </div>

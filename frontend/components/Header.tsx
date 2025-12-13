@@ -771,9 +771,9 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                           {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : ''}
                         </div>
                       </div>
-                      {balance && (
+                      {isConnected && currentChainId && (
                         <div className="text-xs ml-2 whitespace-nowrap">
-                          {parseFloat(formatEther(balance.value)).toFixed(4)} {balance.symbol}
+                          {chains.find(c => c.id === currentChainId)?.name || `Chain ${currentChainId}`}
                         </div>
                       )}
                       <svg 
@@ -794,9 +794,9 @@ export default function Header({ onWalletConnect }: HeaderProps) {
                           <div className="text-xs text-gray-600 font-mono mt-1">
                             {address ? `${address.slice(0, 6)}...${address.slice(-4)}` : ''}
                           </div>
-                          {balance && (
+                          {isConnected && currentChainId && (
                             <div className="text-xs text-gray-600 mt-1">
-                              {parseFloat(formatEther(balance.value)).toFixed(4)} {balance.symbol}
+                              {chains.find(c => c.id === currentChainId)?.name || `Chain ${currentChainId}`}
                             </div>
                           )}
                         </div>
