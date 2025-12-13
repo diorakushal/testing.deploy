@@ -24,7 +24,7 @@ export default function ConfirmEmailPage() {
   const [connectedAfterClick, setConnectedAfterClick] = useState(false); // Track if wallet connected AFTER user clicked button
   const wasConnectedBeforeClickRef = useRef<boolean>(false); // Track connection state at moment of click
   
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, connector } = useAccount();
   const connectModalResult = useConnectModal();
   // Handle both object destructuring and direct function return
   const openConnectModal = typeof connectModalResult === 'function' 
@@ -37,6 +37,37 @@ export default function ConfirmEmailPage() {
     setMounted(true);
   }, []);
   
+  // Helper function to format wallet names nicely
+  const formatWalletName = (name: string): string => {
+    if (!name || name === 'Wallet' || name === 'Injected') {
+      return 'Browser Wallet';
+    }
+    
+    // Remove common prefixes/suffixes
+    let formatted = name
+      .replace(/^io\./, '') // Remove "io." prefix
+      .replace(/\.wallet$/i, '') // Remove ".wallet" suffix
+      .replace(/wallet$/i, '') // Remove "wallet" suffix
+      .trim();
+    
+    // Format: capitalize first letter of each word, handle camelCase
+    formatted = formatted
+      .replace(/([a-z])([A-Z])/g, '$1 $2') // Add space before capital letters in camelCase
+      .split(/[\s-_.]+/) // Split on spaces, hyphens, underscores, dots
+      .map(word => {
+        // Capitalize first letter, lowercase the rest
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
+      .join(' ');
+    
+    return formatted || 'Browser Wallet';
+  };
+
+  // Get wallet name dynamically from connector
+  const walletName = connector 
+    ? formatWalletName(connector.name || connector.id || 'Browser Wallet')
+    : 'Browser Wallet';
+
   // Debug: Log modal availability
   useEffect(() => {
     if (mounted) {
@@ -247,9 +278,9 @@ export default function ConfirmEmailPage() {
 
             {status === 'onboarding' && (
               <div>
-                <h1 className="text-3xl font-bold text-black mb-2">Email verified!</h1>
                 {!walletConnected && (
                   <>
+                    <h1 className="text-3xl font-bold text-black mb-2">Email verified!</h1>
                     <p className="text-gray-600 text-sm mt-2 mb-4">
                       Before setting up your preferred wallets, please connect your wallet first.
                     </p>
@@ -299,15 +330,31 @@ export default function ConfirmEmailPage() {
                       <div className="mt-4">
                         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
                           <p className="text-sm text-gray-700 mb-1">Wallet connected:</p>
-                          <p className="text-sm font-mono text-black">
+                          <p className="text-sm font-mono text-black mb-1">
                             {address?.slice(0, 6)}...{address?.slice(-4)}
                           </p>
+                          <p className="text-xs text-gray-500">{walletName}</p>
                         </div>
                         <button
                           onClick={handleContinueAfterWalletConnect}
-                          className="w-full px-4 py-3 bg-black text-white rounded-full hover:bg-gray-900 active:scale-[0.98] transition-all duration-200 font-medium"
+                          className="w-full px-4 py-3 bg-black text-white rounded-full hover:bg-gray-900 active:scale-[0.98] transition-all duration-200 font-medium mb-3"
                         >
                           Continue
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (openConnectModal) {
+                              try {
+                                openConnectModal();
+                              } catch (error: any) {
+                                console.error('[Confirm] Error opening connect modal:', error);
+                                toast.error('Failed to open wallet connection. Please try again.');
+                              }
+                            }
+                          }}
+                          className="w-full px-4 py-3 bg-gray-200 text-black rounded-full hover:bg-gray-300 active:scale-[0.98] transition-all duration-200 font-medium"
+                        >
+                          Connect Different Wallet
                         </button>
                       </div>
                     )}
